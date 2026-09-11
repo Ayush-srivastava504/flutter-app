@@ -1,0 +1,12 @@
+<!--
+  Reference snippet only — merge these keys into
+  ios/Runner/Info.plist once `flutter create .` has generated the real ios/ folder.
+-->
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Access your photo library to import video clips and photos for editing.</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>Save your exported videos to your photo library.</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>Access your microphone for audio features while editing.</string>
+<key>NSCameraUsageDescription</key>
+<string>Access your camera to record new clips directly in the app.</string>
