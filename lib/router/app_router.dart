@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../screens/home_screen.dart';
+import '../app/launch_gate.dart';
 import '../screens/editor_screen.dart';
 import '../screens/export_screen.dart';
 
@@ -15,7 +15,7 @@ class AppRouter {
   static Route<dynamic> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case home:
-        return MaterialPageRoute(builder: (_) => const HomeScreen());
+        return MaterialPageRoute(builder: (_) => const LaunchGate());
 
       case editor:
         final projectId = settings.arguments as String?;

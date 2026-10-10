@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -46,6 +46,15 @@ class Clips extends Table {
   RealColumn get brightness => real().withDefault(const Constant(0))();
   RealColumn get contrast => real().withDefault(const Constant(0))();
   RealColumn get saturation => real().withDefault(const Constant(0))();
+
+  /// Which `FilterPreset` (see `models/color_filter_x.dart`) this clip's
+  /// brightness/contrast/saturation currently match, or null once the
+  /// user drags a slider away from any preset ("Custom"). Purely a UI
+  /// convenience so `FilterPanel` can highlight the active chip — the
+  /// three numeric columns above are always the source of truth for
+  /// what actually renders, both in the live preview and (Phase 8) at
+  /// export.
+  TextColumn get filterPreset => text().nullable()();
   BoolColumn get muted => boolean().withDefault(const Constant(false))();
 
   /// Independent volume for this clip's *original* audio (0.0–1.0),
@@ -109,6 +118,25 @@ class TextOverlays extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// Immutable copy of a project's editable rows. Drift data classes have value
+/// equality, so two snapshots compare equal iff nothing visible changed.
+class ProjectSnapshot {
+  final List<Clip> clips;
+  final List<AudioTrack> audioTracks;
+  final List<TextOverlay> overlays;
+  const ProjectSnapshot(this.clips, this.audioTracks, this.overlays);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ProjectSnapshot &&
+      listEquals(clips, other.clips) &&
+      listEquals(audioTracks, other.audioTracks) &&
+      listEquals(overlays, other.overlays);
+
+  @override
+  int get hashCode => Object.hash(Object.hashAll(clips), Object.hashAll(audioTracks), Object.hashAll(overlays));
+}
+
 @DriftDatabase(tables: [Projects, Clips, AudioTracks, TextOverlays])
 class ProjectDatabase extends _$ProjectDatabase {
   ProjectDatabase() : super(_openConnection());
@@ -123,7 +151,7 @@ class ProjectDatabase extends _$ProjectDatabase {
   ProjectDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -151,12 +179,62 @@ class ProjectDatabase extends _$ProjectDatabase {
             // get it via `createAll()` and just no-op past this branch.
             await m.createTable(textOverlays);
           }
+          if (from < 5) {
+            // Phase 7 (first half): Clips gained `filterPreset`, a
+            // nullable label for whichever `FilterPreset` the clip's
+            // existing brightness/contrast/saturation columns match.
+            // Those three columns already existed (declared ahead of
+            // this phase) but nothing wrote to them yet — installs
+            // upgrading from here simply get `null` (== "Custom"/no
+            // preset), same as every clip's actual 0/0/0 default.
+            await m.addColumn(clips, clips.filterPreset);
+          }
         },
       );
 
   // --- Query helpers -------------------------------------------------
 
   Future<List<Project>> allProjects() => select(projects).get();
+
+  Future<Project?> getProject(String id) =>
+      (select(projects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  /// Autosave stamp: edits are written to SQLite as they happen, so "saving"
+  /// is just recording when the project last changed.
+  Future<void> touchProject(String id) =>
+      (update(projects)..where((t) => t.id.equals(id)))
+          .write(ProjectsCompanion(updatedAt: Value(DateTime.now())));
+
+  /// Everything undo/redo needs to put a project back exactly as it was.
+  Future<ProjectSnapshot> snapshotProject(String projectId) async {
+    final c = await (select(clips)
+          ..where((t) => t.projectId.equals(projectId))
+          ..orderBy([(t) => OrderingTerm.asc(t.orderIndex), (t) => OrderingTerm.asc(t.id)]))
+        .get();
+    final a = await (select(audioTracks)..where((t) => t.projectId.equals(projectId))).get();
+    final o = await (select(textOverlays)
+          ..where((t) => t.projectId.equals(projectId))
+          ..orderBy([(t) => OrderingTerm.asc(t.startMs), (t) => OrderingTerm.asc(t.id)]))
+        .get();
+    return ProjectSnapshot(c, a, o);
+  }
+
+  /// Replaces the project's clips/audio/overlays with [s] in one transaction,
+  /// so streams (timeline, preview) update once, not row by row.
+  Future<void> restoreProject(String projectId, ProjectSnapshot s) => transaction(() async {
+        await (delete(clips)..where((t) => t.projectId.equals(projectId))).go();
+        await (delete(audioTracks)..where((t) => t.projectId.equals(projectId))).go();
+        await (delete(textOverlays)..where((t) => t.projectId.equals(projectId))).go();
+        for (final c in s.clips) {
+          await into(clips).insert(c.toCompanion(false));
+        }
+        for (final a in s.audioTracks) {
+          await into(audioTracks).insert(a.toCompanion(false));
+        }
+        for (final o in s.overlays) {
+          await into(textOverlays).insert(o.toCompanion(false));
+        }
+      });
 
   Future<int> insertProject(ProjectsCompanion project) =>
       into(projects).insert(project);
@@ -232,6 +310,35 @@ class ProjectDatabase extends _$ProjectDatabase {
           await (update(clips)..where((c) => c.id.equals(remaining[i].id)))
               .write(ClipsCompanion(orderIndex: Value(i)));
         }
+      }
+    });
+  }
+
+  /// Sets brightness/contrast/saturation (and, for the presets picker,
+  /// [filterPreset]) on every clip in [projectId] at once — the
+  /// "globally" half of Phase 7's spec item 3. Runs as one transaction,
+  /// same rationale as [reorderClips]/[deleteClipAndReindex]: the UI
+  /// should never observe some clips updated and others not.
+  Future<void> applyFilterToAllClips(
+    String projectId, {
+    required double brightness,
+    required double contrast,
+    required double saturation,
+    String? filterPreset,
+  }) {
+    return transaction(() async {
+      final all = await (select(clips)
+            ..where((c) => c.projectId.equals(projectId)))
+          .get();
+      for (final c in all) {
+        await (update(clips)..where((row) => row.id.equals(c.id))).write(
+          ClipsCompanion(
+            brightness: Value(brightness),
+            contrast: Value(contrast),
+            saturation: Value(saturation),
+            filterPreset: Value(filterPreset),
+          ),
+        );
       }
     });
   }

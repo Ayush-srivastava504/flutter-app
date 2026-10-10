@@ -38,7 +38,16 @@ dependencies:
   video_thumbnail: ^0.5.3
 
   # Final compositing / export pipeline
-  ffmpeg_kit_flutter: ^6.0.3
+  # ffmpeg_kit_flutter ^6.0.3 was retired by its author and its binaries were removed
+  # (April 2025), so it no longer builds. This is the maintained community fork's
+  # non-GPL "full" build (has libfreetype for text overlays). Pin it with
+  # `flutter pub add ffmpeg_kit_flutter_new_full` after the first `pub get`.
+  ffmpeg_kit_flutter_new_full: ^2.5.7
+  # Phase 8 — export delivery
+  gal: ^2.3.1
+  share_plus: ^10.1.4
+  flutter_local_notifications: ^17.2.4
+  wakelock_plus: ^1.2.8
 
   # IDs
   uuid: ^4.4.0
@@ -57,3 +66,8 @@ flutter:
   assets:
     - assets/images/
     - assets/audio/
+    - assets/fonts/
+
+dependency_overrides:
+  video_thumbnail:
+    path: third_party/video_thumbnail

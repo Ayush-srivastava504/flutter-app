@@ -1,24 +1,31 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../app/launch_gate.dart' show appPrefsProvider;
 import '../data/database_provider.dart';
 import '../data/project_database.dart';
 import '../models/audio_asset.dart';
 import '../models/bundled_track.dart';
 import '../models/clip_x.dart';
 import '../models/media_asset.dart';
+import '../models/transition_x.dart';
 import '../providers/audio_providers.dart';
 import '../providers/text_overlay_providers.dart';
 import '../providers/timeline_providers.dart';
 import '../router/app_router.dart';
 import '../services/audio_import_service.dart';
 import '../services/media_import_service.dart';
+import '../widgets/common/state_views.dart';
+import '../widgets/history_actions.dart';
 import '../widgets/text_overlay_layer.dart';
 import '../widgets/timeline/audio_track_lane.dart';
 import '../widgets/timeline/audio_track_panel.dart';
+import '../widgets/timeline/filter_panel.dart';
 import '../widgets/timeline/text_overlay_panel.dart';
 import '../widgets/timeline/text_overlay_strip.dart';
 import '../widgets/timeline/timeline_scrub_bar.dart';
@@ -42,9 +49,20 @@ import '../widgets/video_preview_player.dart';
 /// `playheadMsProvider` advancing during live playback (not just scrub)
 /// via `VideoPreviewPlayer.onPositionTick`, and maps overlay positions
 /// onto the actual letterboxed video frame via `onAspectRatioKnown`.
-/// Transitions/filters (Phase 7) are still stubs. See
-/// PHASE_5_PROGRESS.md / PHASE_6_PROGRESS.md for what each phase still
-/// leaves open.
+/// Phase 7 adds transitions + filters, in two passes. First pass: a
+/// transition badge at each clip's trailing edge on the timeline strip
+/// (opens a cut/fade/dissolve picker, persisted to
+/// `Clip.transitionOut`), and a `FilterPanel`/`TrimPanel` tab switch in
+/// the bottom panel so a selected clip's brightness/contrast/saturation
+/// (plus bundled presets) can be dialed in with a live preview via
+/// `VideoPreviewPlayer`. Second pass: `_buildPreviewArea` actually
+/// renders the chosen transition as the playhead nears a clip boundary
+/// (see `models/transition_x.dart`), and `FilterPanel` gained a "This
+/// clip"/"All clips" toggle so filters can be applied project-wide, not
+/// just per-clip. See PHASE_5_PROGRESS.md / PHASE_6_PROGRESS.md /
+/// PHASE_7_PROGRESS.md for what each phase still leaves open — notably,
+/// baking any of this into exported frames is Phase 8 (the export
+/// pipeline doesn't exist yet).
 class EditorScreen extends ConsumerStatefulWidget {
   final String? projectId;
 
@@ -55,12 +73,28 @@ class EditorScreen extends ConsumerStatefulWidget {
 }
 
 class _EditorScreenState extends ConsumerState<EditorScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Remember what the user was editing so Home can offer "Resume".
+    final id = widget.projectId;
+    if (id != null) ref.read(appPrefsProvider).setLastProjectId(id);
+  }
+
   final MediaImportService _importService = MediaImportService();
   final AudioImportService _audioImportService = AudioImportService();
 
   bool _isImporting = false;
   String? _importError;
   bool _isImportingAudio = false;
+
+  /// Which tab the bottom panel shows for a selected clip — trim/split/
+  /// delete/volume (`TrimPanel`, Phase 4/5) or the Phase 7
+  /// brightness/contrast/saturation controls (`FilterPanel`). A plain
+  /// screen-level toggle rather than per-clip state: which tab you were
+  /// just looking at is more likely to be what you want to keep looking
+  /// at on the next clip than a reset back to "Trim" every tap.
+  _ClipPanelTab _clipPanelTab = _ClipPanelTab.trim;
 
   /// Aspect ratio (width / height) of each clip's video, keyed by clip
   /// id, as reported by `VideoPreviewPlayer` once its controller
@@ -289,6 +323,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       appBar: AppBar(
         title: const Text('Editor'),
         actions: [
+          if (projectId != null) HistoryActions(projectId: projectId),
           TextButton(
             onPressed: projectId == null
                 ? null
@@ -304,9 +339,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       body: clipsAsync == null
           ? const Center(child: Text('No project selected.'))
           : clipsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Couldn\'t load project: $e')),
-              data: (clips) => _buildBody(projectId, clips),
+              loading: () => const LoadingStateView(message: 'Opening project…'),
+              error: (e, _) => ErrorStateView(
+                message: 'Couldn\'t load this project: $e',
+                onRetry: () => ref.invalidate(clipsProvider(projectId!)),
+              ),
+              data: (clips) => _buildBody(projectId!, clips),
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _isImporting ? null : _showImportSheet,
@@ -350,14 +388,22 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       children: [
         Expanded(
           flex: 3,
-          child: Container(
+          child: RepaintBoundary(
+            child: Container(
             color: Colors.black,
             alignment: Alignment.center,
             child: Stack(
               alignment: Alignment.center,
               fit: StackFit.expand,
               children: [
-                Center(child: _buildPreviewArea(currentPos, audioTrack)),
+                Center(
+                  child: _buildPreviewArea(
+                    currentPos,
+                    layout,
+                    playheadMs,
+                    audioTrack,
+                  ),
+                ),
                 TextOverlayLayer(
                   overlays: textOverlays,
                   playheadMs: playheadMs,
@@ -366,12 +412,15 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
               ],
             ),
           ),
+          ),
         ),
         Expanded(
           flex: 2,
           child: Container(
             color: Colors.grey[900],
-            child: TimelineStrip(projectId: projectId, clips: clips),
+            child: RepaintBoundary(
+              child: TimelineStrip(projectId: projectId, clips: clips),
+            ),
           ),
         ),
         AudioTrackLane(
@@ -400,7 +449,19 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
         else if (audioPanelOpen && audioTrack != null)
           AudioTrackPanel(track: audioTrack, totalTimelineMs: totalMs)
         else if (selectedClip != null)
-          TrimPanel(clip: selectedClip, allClips: clips)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ClipPanelTabBar(
+                selected: _clipPanelTab,
+                onChanged: (tab) => setState(() => _clipPanelTab = tab),
+              ),
+              if (_clipPanelTab == _ClipPanelTab.trim)
+                TrimPanel(clip: selectedClip, allClips: clips)
+              else
+                FilterPanel(clip: selectedClip),
+            ],
+          )
         else
           SafeArea(
             top: false,
@@ -422,7 +483,7 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
                   ),
                   const Spacer(),
                   const Text(
-                    'Transitions · Filters',
+                    'Tap a clip to trim/filter · ⚬ for transitions',
                     style: TextStyle(color: Colors.white38, fontSize: 12),
                   ),
                 ],
@@ -433,7 +494,12 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
     );
   }
 
-  Widget _buildPreviewArea(TimelinePosition? currentPos, AudioTrack? audioTrack) {
+  Widget _buildPreviewArea(
+    TimelinePosition? currentPos,
+    List<TimelinePosition> layout,
+    int playheadMs,
+    AudioTrack? audioTrack,
+  ) {
     if (_importError != null) {
       return Text(
         _importError!,
@@ -468,7 +534,23 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       thumbnailUri: clip.thumbnailUri,
     );
 
-    return VideoPreviewPlayer(
+    // Phase 7 (second half): as the playhead nears this clip's trimmed
+    // end, blend toward the next clip's thumbnail per
+    // `transitionPreviewAt` — see `models/transition_x.dart` for why
+    // this is thumbnail-based rather than a true two-video crossfade.
+    final currentIndex = layout.indexWhere((pos) => pos.clip.id == clip.id);
+    final hasNext = currentIndex >= 0 && currentIndex < layout.length - 1;
+    final preview = hasNext
+        ? transitionPreviewAt(
+            transitionOut: clip.transitionOut,
+            playheadMs: playheadMs,
+            boundaryMs: currentPos.endMs,
+          )
+        : TransitionPreview.none;
+    final nextThumbnailUri =
+        hasNext ? layout[currentIndex + 1].clip.thumbnailUri : null;
+
+    final player = VideoPreviewPlayer(
       key: ValueKey(clip.id),
       asset: asset,
       trimStartMs: isPhoto ? null : clip.trimStartMs,
@@ -480,6 +562,84 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
       onPositionTick: (ms) =>
           ref.read(playheadMsProvider.notifier).state = ms,
       onAspectRatioKnown: (ratio) => _onAspectRatioKnown(clip.id, ratio),
+      brightness: clip.brightness,
+      contrast: clip.contrast,
+      saturation: clip.saturation,
+    );
+
+    if (preview.nextOpacity == 0 && preview.currentOpacity == 1) {
+      // No transition in effect right now — skip the Stack/Opacity
+      // wrapping entirely for the common case.
+      return player;
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      alignment: Alignment.center,
+      children: [
+        // Solid black backdrop so a 'fade' transition's fade-through-
+        // black is actually visible between the two Opacity layers,
+        // rather than showing whatever was behind the Stack.
+        Container(color: Colors.black),
+        Opacity(opacity: preview.currentOpacity, child: player),
+        if (preview.nextOpacity > 0 && nextThumbnailUri != null)
+          Opacity(
+            opacity: preview.nextOpacity,
+            child: Image.file(
+              File(nextThumbnailUri),
+              fit: BoxFit.contain,
+              cacheWidth: 720,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Which sub-panel `EditorScreen` shows for a selected clip. See
+/// `_EditorScreenState._clipPanelTab`'s doc comment.
+enum _ClipPanelTab { trim, filters }
+
+/// Small two-way switch above the selected-clip panel. Deliberately
+/// plain (`TextButton`s, not a full `TabBar`) to match the weight of
+/// everything else docked in this bottom strip — a `TabBar` would read
+/// as a bigger piece of chrome than a two-option toggle warrants here.
+class _ClipPanelTabBar extends StatelessWidget {
+  final _ClipPanelTab selected;
+  final ValueChanged<_ClipPanelTab> onChanged;
+
+  const _ClipPanelTabBar({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = Theme.of(context).colorScheme.primary;
+    Widget tab(_ClipPanelTab tab, String label) {
+      final isActive = tab == selected;
+      return TextButton(
+        onPressed: () => onChanged(tab),
+        style: TextButton.styleFrom(
+          foregroundColor: isActive ? accent : Colors.white54,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      color: Colors.grey[850],
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          tab(_ClipPanelTab.trim, 'Trim'),
+          tab(_ClipPanelTab.filters, 'Filters'),
+        ],
+      ),
     );
   }
 }

@@ -62,6 +62,7 @@ class TimelineStrip extends ConsumerWidget {
         },
         itemBuilder: (context, index) {
           final clip = clips[index];
+          final isLast = index == clips.length - 1;
           return ReorderableDragStartListener(
             key: ValueKey(clip.id),
             index: index,
@@ -69,15 +70,101 @@ class TimelineStrip extends ConsumerWidget {
               clip: clip,
               isSelected: clip.id == selectedId,
               pixelsPerSecond: zoom,
+              isLast: isLast,
               onTap: () {
                 ref.read(selectedClipIdProvider.notifier).state = clip.id;
                 ref.read(audioPanelOpenProvider.notifier).state = false;
                 ref.read(textPanelOpenProvider.notifier).state = false;
               },
+              onTransitionTap:
+                  isLast ? null : () => _pickTransition(context, ref, clip),
             ),
           );
         },
       ),
+    );
+  }
+
+  /// Opens a small picker for the transition into the *next* clip
+  /// (i.e. [Clip.transitionOut] on [clip]) — cut, fade, or
+  /// cross-dissolve, per the Phase 7 spec. Actually blending the two
+  /// clips' frames together in the live preview is export-pipeline
+  /// territory (Phase 8); this pass persists the choice and reflects
+  /// it on the timeline tile, same "edit the model now, render it
+  /// later" split Phase 4's non-destructive trim already established.
+  void _pickTransition(BuildContext context, WidgetRef ref, Clip clip) {
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                'Transition into next clip',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ),
+            _TransitionOption(
+              icon: Icons.content_cut,
+              label: 'Cut',
+              selected: clip.transitionOut == 'cut',
+              onTap: () => _setTransition(ref, sheetContext, clip, 'cut'),
+            ),
+            _TransitionOption(
+              icon: Icons.gradient,
+              label: 'Fade',
+              selected: clip.transitionOut == 'fade',
+              onTap: () => _setTransition(ref, sheetContext, clip, 'fade'),
+            ),
+            _TransitionOption(
+              icon: Icons.blur_on,
+              label: 'Cross-dissolve',
+              selected: clip.transitionOut == 'dissolve',
+              onTap: () => _setTransition(ref, sheetContext, clip, 'dissolve'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _setTransition(
+    WidgetRef ref,
+    BuildContext sheetContext,
+    Clip clip,
+    String transition,
+  ) {
+    ref
+        .read(projectDatabaseProvider)
+        .updateClip(clip.copyWith(transitionOut: transition));
+    Navigator.pop(sheetContext);
+  }
+}
+
+class _TransitionOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _TransitionOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: selected ? Theme.of(context).colorScheme.secondary : Colors.white70,
+      ),
+      title: Text(label),
+      trailing: selected ? const Icon(Icons.check, size: 18) : null,
+      onTap: onTap,
     );
   }
 }

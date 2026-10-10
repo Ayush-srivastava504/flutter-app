@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../../models/clip_x.dart';
@@ -41,7 +43,7 @@ class TimelineScrubBar extends StatelessWidget {
             height: 28,
             color: Colors.grey[850],
             child: Stack(
-              clipBehavior: Clip.none,
+              clipBehavior: ui.Clip.none,
               children: [
                 for (final pos in layout)
                   Positioned(

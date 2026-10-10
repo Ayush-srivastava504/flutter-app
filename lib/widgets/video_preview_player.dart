@@ -1,11 +1,13 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
+import 'dart:ui' show ColorFilter;
 
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 
 import '../data/project_database.dart';
+import '../models/color_filter_x.dart';
 import '../models/media_asset.dart';
 
 /// Full-screen-ish preview of a single [MediaAsset].
@@ -45,10 +47,26 @@ import '../models/media_asset.dart';
 /// once known, so overlay positions can be mapped onto the actual
 /// letterboxed frame instead of the full preview canvas. Both are
 /// no-ops (null) by default.
+///
+/// Phase 7 (first half) adds [brightness]/[contrast]/[saturation]: a
+/// live `ColorFiltered` wrap driven by `models/color_filter_x.dart`'s
+/// pure matrix math, so a slider drag or preset tap in `FilterPanel`
+/// shows up on this same preview immediately — no separate "preview
+/// render" step. Applies to the photo branch too, not just video.
+/// Baking the filter into the actual exported frames is Phase 8 work
+/// (the export pipeline doesn't exist yet); this only ever affects
+/// what's drawn on screen here.
 class VideoPreviewPlayer extends StatefulWidget {
   final MediaAsset asset;
   final int? trimStartMs;
   final int? trimEndMs;
+
+  /// Live color-adjustment values, each in [-1.0, 1.0] with 0 ==
+  /// unchanged — same semantics/range as the `Clips` columns they're
+  /// normally read from. See the class doc comment above.
+  final double brightness;
+  final double contrast;
+  final double saturation;
 
   /// This clip's own audio level (0.0–1.0), applied whenever [muted] is
   /// false.
@@ -89,6 +107,9 @@ class VideoPreviewPlayer extends StatefulWidget {
     this.timelineStartMs = 0,
     this.onPositionTick,
     this.onAspectRatioKnown,
+    this.brightness = 0,
+    this.contrast = 0,
+    this.saturation = 0,
   });
 
   @override
@@ -342,6 +363,15 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
 
   @override
   Widget build(BuildContext context) {
+    return _FilterPreview(
+      brightness: widget.brightness,
+      contrast: widget.contrast,
+      saturation: widget.saturation,
+      child: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     if (!widget.asset.isVideo) {
       return _PhotoPreview(asset: widget.asset);
     }
@@ -387,6 +417,44 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Wraps [child] in a live `ColorFiltered` built from
+/// `models/color_filter_x.dart`'s matrix math, or returns [child]
+/// unchanged when every value is at its neutral default — the common
+/// case (most clips are never touched in `FilterPanel`), so unedited
+/// clips don't pay for a no-op filter on every frame.
+class _FilterPreview extends StatelessWidget {
+  final double brightness;
+  final double contrast;
+  final double saturation;
+  final Widget child;
+
+  const _FilterPreview({
+    required this.brightness,
+    required this.contrast,
+    required this.saturation,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isNeutralFilter(
+      brightness: brightness,
+      contrast: contrast,
+      saturation: saturation,
+    )) {
+      return child;
+    }
+    return ColorFiltered(
+      colorFilter: ColorFilter.matrix(buildColorMatrix(
+        brightness: brightness,
+        contrast: contrast,
+        saturation: saturation,
+      )),
+      child: child,
     );
   }
 }
@@ -442,6 +510,7 @@ class _LoadingPreview extends StatelessWidget {
         Image.file(
           File(thumbnailUri),
           fit: BoxFit.contain,
+          cacheWidth: 720,
           // If the cached thumbnail file has gone missing, fall back
           // silently to the plain black backdrop underneath.
           errorBuilder: (_, __, ___) => const SizedBox.shrink(),
@@ -463,6 +532,7 @@ class _PhotoPreview extends StatelessWidget {
     return Image.file(
       File(asset.uri),
       fit: BoxFit.contain,
+      cacheWidth: 1440, // a 12MP photo would otherwise decode to ~48MB for a 3s clip
       errorBuilder: (_, __, ___) => const _PreviewMessage(
         icon: Icons.error_outline,
         text: 'Couldn\'t load this photo.',

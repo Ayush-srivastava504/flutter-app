@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -15,12 +16,24 @@ class TimelineClipTile extends StatelessWidget {
   final double pixelsPerSecond;
   final VoidCallback onTap;
 
+  /// False for every clip except the last on the timeline — the
+  /// trailing transition badge (Phase 7) only makes sense on a clip
+  /// that has a *next* clip for [Clip.transitionOut] to describe the
+  /// join into.
+  final bool isLast;
+
+  /// Opens the transition picker for the boundary after this clip.
+  /// Null (and the badge hidden) when [isLast].
+  final VoidCallback? onTransitionTap;
+
   const TimelineClipTile({
     super.key,
     required this.clip,
     required this.isSelected,
     required this.pixelsPerSecond,
     required this.onTap,
+    this.isLast = false,
+    this.onTransitionTap,
   });
 
   static const double _minWidth = 36;
@@ -46,7 +59,7 @@ class TimelineClipTile extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(4),
         ),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: ui.Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -57,17 +70,65 @@ class TimelineClipTile extends StatelessWidget {
                 top: 2,
                 child: Icon(Icons.volume_off, size: 14, color: Colors.white70),
               ),
-            if (clip.transitionOut != 'cut')
+            if (!isLast)
               Positioned(
-                right: 0,
+                right: 2,
                 top: 0,
                 bottom: 0,
-                child: Container(
-                  width: 3,
-                  color: Theme.of(context).colorScheme.secondary,
+                child: Center(
+                  child: _TransitionBadge(
+                    transitionOut: clip.transitionOut,
+                    onTap: onTransitionTap,
+                  ),
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tappable icon at a clip's trailing edge showing (and letting the
+/// user change) [Clip.transitionOut] — the UI control the Phase 7 spec
+/// calls for "at the clip boundary". A plain `GestureDetector` nested
+/// inside the tile's own drag-and-tap handling is enough for it to win
+/// taps within its small hit area without interfering with either
+/// long-press-drag-to-reorder or the tile's own select-on-tap.
+class _TransitionBadge extends StatelessWidget {
+  final String transitionOut;
+  final VoidCallback? onTap;
+
+  const _TransitionBadge({required this.transitionOut, required this.onTap});
+
+  IconData get _icon {
+    switch (transitionOut) {
+      case 'fade':
+        return Icons.gradient;
+      case 'dissolve':
+        return Icons.blur_on;
+      default:
+        return Icons.content_cut;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCut = transitionOut == 'cut';
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: isCut ? Colors.black45 : Theme.of(context).colorScheme.secondary,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _icon,
+          size: 12,
+          color: isCut ? Colors.white38 : Colors.black87,
         ),
       ),
     );
@@ -91,6 +152,8 @@ class _Thumbnail extends StatelessWidget {
     return Image.file(
       File(uri),
       fit: BoxFit.cover,
+      cacheWidth: 240, // decode a small bitmap, not the full-size source (memory)
+      gaplessPlayback: true,
       errorBuilder: (_, __, ___) => Container(
         color: Colors.grey[800],
         alignment: Alignment.center,

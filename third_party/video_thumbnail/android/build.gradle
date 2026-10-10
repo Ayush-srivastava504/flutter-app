@@ -1,0 +1,12 @@
+plugins {
+    id 'com.android.library'
+}
+
+android {
+    namespace 'xyz.justsoft.video_thumbnail'
+    compileSdk 36
+
+    defaultConfig {
+        minSdkVersion 16
+    }
+}
