@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
@@ -76,7 +77,8 @@ class ExportController extends StateNotifier<ExportState> {
       if (!mounted) return;
       state = ExportState(phase: ExportPhase.failed, failure: f);
       await _notifier.finished(success: false, message: f.message);
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[export] unexpected error: $e\n$st');
       if (!mounted) return;
       final f = ExportFailure(ExportFailureKind.unknown, failureMessage(ExportFailureKind.unknown), detail: '$e');
       state = ExportState(phase: ExportPhase.failed, failure: f);

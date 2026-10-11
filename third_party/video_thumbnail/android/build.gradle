@@ -7,6 +7,12 @@ android {
     compileSdk 36
 
     defaultConfig {
-        minSdkVersion 16
+        // AGP 8.x no longer supports minSdk below 21 reliably; the app uses 24+ anyway.
+        minSdk 21
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }

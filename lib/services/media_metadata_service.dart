@@ -1,4 +1,4 @@
-import 'package:ffmpeg_kit_flutter/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
 
 /// Reads the rotation flag baked into a video's container metadata.
 ///

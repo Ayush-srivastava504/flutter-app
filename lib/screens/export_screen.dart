@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../export/export_command_builder.dart';
@@ -135,6 +136,16 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       Text(f?.message ?? failureMessage(ExportFailureKind.unknown), textAlign: TextAlign.center),
       const SizedBox(height: 24),
       FilledButton(onPressed: () => controller.start(_quality), child: const Text('Try again')),
+      if (f?.detail != null)
+        TextButton.icon(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: f!.detail!));
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error details copied')));
+          },
+          icon: const Icon(Icons.copy, size: 18),
+          label: const Text('Copy error details'),
+        ),
       TextButton(onPressed: controller.reset, child: const Text('Change settings')),
     ]);
   }

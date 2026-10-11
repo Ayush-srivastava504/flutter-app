@@ -49,34 +49,46 @@ class FfmpegKitEngine implements ExportEngine {
     final done = Completer<EngineResult>();
     final log = StringBuffer();
 
-    FFmpegKit.executeWithArgumentsAsync(
-      args,
-      (session) async {
-        final rc = await session.getReturnCode();
-        var text = log.toString();
-        if (text.length > _maxLogChars) text = text.substring(text.length - _maxLogChars);
+    // If the native FFmpegKit layer can't start (missing native library, wrong
+    // ABI, stripped by R8…) the call below throws. Without the catch the
+    // returned future would never complete and the export would sit at 0% forever.
+    unawaited(() async {
+      try {
+        final started = await FFmpegKit.executeWithArgumentsAsync(
+          args,
+          (finished) async {
+            final rc = await finished.getReturnCode();
+            var text = log.toString();
+            if (text.length > _maxLogChars) text = text.substring(text.length - _maxLogChars);
+            if (!done.isCompleted) {
+              done.complete(EngineResult(
+                success: ReturnCode.isSuccess(rc),
+                cancelled: ReturnCode.isCancel(rc),
+                log: text,
+              ));
+            }
+          },
+          (l) {
+            log.writeln(l.getMessage());
+            if (log.length > _maxLogChars * 2) {
+              final tail = log.toString().substring(log.length - _maxLogChars);
+              log
+                ..clear()
+                ..write(tail);
+            }
+          },
+          (stats) {
+            final Object? t = stats.getTime();
+            if (t is num && t >= 0) onTimeMs(t.toInt());
+          },
+        );
+        _sessionId = started.getSessionId();
+      } catch (e) {
         if (!done.isCompleted) {
-          done.complete(EngineResult(
-            success: ReturnCode.isSuccess(rc),
-            cancelled: ReturnCode.isCancel(rc),
-            log: text,
-          ));
+          done.complete(EngineResult(success: false, cancelled: false, log: 'FFmpegKit failed to start: $e'));
         }
-      },
-      (l) {
-        log.writeln(l.getMessage());
-        if (log.length > _maxLogChars * 2) {
-          final tail = log.toString().substring(log.length - _maxLogChars);
-          log
-            ..clear()
-            ..write(tail);
-        }
-      },
-      (stats) {
-        final Object? t = stats.getTime();
-        if (t is num && t >= 0) onTimeMs(t.toInt());
-      },
-    ).then((session) => _sessionId = session.getSessionId());
+      }
+    }());
 
     return done.future;
   }

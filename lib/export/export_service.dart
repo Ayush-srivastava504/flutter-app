@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -159,7 +160,12 @@ class ExportService {
           throw ExportFailure(ExportFailureKind.interrupted, failureMessage(ExportFailureKind.interrupted));
         }
         final kind = classifyFfmpegLog(result.log);
-        last = ExportFailure(kind, failureMessage(kind), detail: result.log);
+        final report = 'encoder: ${_encoders[i].name}\n'
+            'classified as: ${kind.name}\n'
+            'command: ffmpeg ${cmd.args.join(' ')}\n'
+            '--- ffmpeg log tail ---\n${result.log}';
+        debugPrint('[export] FAILED\n$report');
+        last = ExportFailure(kind, failureMessage(kind), detail: report);
         // Disk full / missing source won't be fixed by another encoder; anything else gets
         // one more try on the next (more compatible) encoder.
         if (kind == ExportFailureKind.insufficientStorage || kind == ExportFailureKind.sourceMissing) break;
