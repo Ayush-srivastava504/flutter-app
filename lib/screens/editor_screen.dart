@@ -26,6 +26,7 @@ import '../widgets/text_overlay_layer.dart';
 import '../widgets/timeline/audio_track_lane.dart';
 import '../widgets/timeline/audio_track_panel.dart';
 import '../widgets/timeline/filter_panel.dart';
+import '../widgets/timeline/playhead_controls.dart';
 import '../widgets/timeline/text_overlay_panel.dart';
 import '../widgets/timeline/text_overlay_strip.dart';
 import '../widgets/timeline/timeline_scrub_bar.dart';
@@ -433,17 +434,10 @@ class _EditorScreenState extends ConsumerState<EditorScreen> {
           layout: layout,
           totalMs: totalMs,
           playheadMs: playheadMs,
-          onScrub: (ms) {
-            ref.read(playheadMsProvider.notifier).state = ms;
-            final scrubbedPos = positionAt(layout, ms);
-            if (scrubbedPos != null) {
-              ref.read(selectedClipIdProvider.notifier).state =
-                  scrubbedPos.clip.id;
-              ref.read(audioPanelOpenProvider.notifier).state = false;
-              ref.read(textPanelOpenProvider.notifier).state = false;
-            }
-          },
+          snapEnabled: ref.watch(snapScrubProvider),
+          onScrub: (ms) => seekTimeline(ref, layout, ms),
         ),
+        PlayheadControls(clips: clips),
         if (textPanelOpen && selectedTextOverlay != null)
           TextOverlayPanel(overlay: selectedTextOverlay, totalTimelineMs: totalMs)
         else if (audioPanelOpen && audioTrack != null)

@@ -12,8 +12,8 @@ import 'export_inputs.dart';
 import 'export_models.dart';
 
 /// Rough output size, for the quality picker ("~48 MB").
-int estimatedExportBytes(ExportQuality quality, int durationMs) =>
-    ((quality.videoBitrate + 192000) * durationMs / 1000 / 8).round();
+int estimatedExportBytes(ExportQuality quality, int durationMs, {int fps = defaultExportFps}) =>
+    ((exportVideoBitrate(quality, fps) + 192000) * durationMs / 1000 / 8).round();
 
 /// Maps FFmpeg's log tail to a failure kind. Pure, so it's unit-tested.
 ExportFailureKind classifyFfmpegLog(String log) {
@@ -91,6 +91,7 @@ class ExportService {
   Future<File> export({
     required String projectId,
     required ExportQuality quality,
+    int fps = defaultExportFps,
     required void Function(double progress) onProgress,
   }) async {
     final project = await db.getProject(projectId);
@@ -142,6 +143,7 @@ class ExportService {
           music: music,
           aspectRatio: project.aspectRatio,
           quality: quality,
+          fps: fps,
           encoder: _encoders[i],
           outputPath: output,
           fontPaths: fonts,
@@ -161,6 +163,7 @@ class ExportService {
         }
         final kind = classifyFfmpegLog(result.log);
         final report = 'encoder: ${_encoders[i].name}\n'
+            'quality: ${quality.label} @ $fps fps\n'
             'classified as: ${kind.name}\n'
             'command: ffmpeg ${cmd.args.join(' ')}\n'
             '--- ffmpeg log tail ---\n${result.log}';

@@ -167,7 +167,7 @@ ExportScreen ──tap──▶ ExportController.start()           export_contro
 ```
 
 **The FFmpeg command (the heart).** `buildExportCommand` writes one `-filter_complex` graph:
-1. each clip → trim → set fps 30 → scale + pad to output size → filters (`eq`) → fades; its audio → trim → volume (or generated silence for photos/silent clips)
+1. each clip → trim → set fps (30 unless the user picked 24/60 on the Export screen) → scale + pad to output size → filters (`eq`) → fades; its audio → trim → volume (or generated silence for photos/silent clips)
 2. clips joined pairwise with `concat` (cut/fade) or `xfade` + `acrossfade` (dissolve; shortens the video)
 3. text → `drawtext` with `enable='between(t,start,end)'`; times shifted earlier after dissolves
 4. music → trim → volume → delay → `amix` with the clip audio → limiter

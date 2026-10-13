@@ -24,7 +24,7 @@ Do not turn a Target into a claim ("the app is fast") until §6 has a measured n
 | P-5 | **Import is sequential by design** (controller init → FFprobe → thumbnail) and uses a throw-away `VideoPlayerController` to read duration/size. | `media_import_service.dart` `_buildVideoAsset` | Several hundred ms per clip; the UI shows a spinner. Deliberate to avoid 3 concurrent readers. | Leave until measured (§5). |
 | P-6 | **Imported media lives in the cache dir** → can be cleared → export fails (reliability, not speed). | FACTS F-50 | Re-import loop for users; also re-thumbnailing. | Copy to documents dir (plan P1). **S–M**. |
 | P-7 | Fonts are bundled (≈1.8 MB) **and** copied to the temp dir at export time; they are copied once and reused (`file.exists && length>0`). | `export_service.dart` `_materialiseFonts` | Negligible. Do nothing. | — |
-| P-8 | `fps=30` is a global constant; 60 fps is planned (F5). | `export_command_builder.dart` `exportFps` | 2× encode work; may trigger hardware-encoder failure → slow `mpeg4` fallback. | Time it (§5) before offering 60 fps. |
+| P-8 | Frame rate is now a choice (24/30/60, F5, 2026-10-13); 60 fps has **not** been timed on a phone. | `export_command_builder.dart` `fps` parameter | 2× encode work; may trigger hardware-encoder failure → slow `mpeg4` fallback. | Time it (§5) before offering 60 fps. |
 
 **Already good (keep):** timeline thumbnails decode at `cacheWidth: 240`; preview photos at 720/1440 (`timeline_clip_tile.dart:155`, `video_preview_player.dart:513,535`); `RepaintBoundary` around preview + timeline; hardware H.264 tried first; text via files (no escaping retries); export folders pruned after 1 day; `NativeDatabase.createInBackground` (DB off the UI isolate).
 

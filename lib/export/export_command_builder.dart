@@ -18,7 +18,6 @@ library export_command_builder;
 
 import 'export_models.dart';
 
-const int exportFps = 30;
 const int maxDissolveMs = 600;
 const int fadeDipMs = 300;
 const int audioRate = 44100;
@@ -109,6 +108,9 @@ List<String> encoderArgs(VideoEncoder encoder, int bitrate) {
 
 /// Builds the full FFmpeg argument list.
 ///
+/// [fps] is the output frame rate (see [exportFpsOptions]); it drives the
+/// per-clip `fps=` filter, the photo `-framerate`, and the output `-r`.
+///
 /// [fontPaths] maps `TextOverlays.fontFamily` preset names to a font file (it
 /// must contain 'Default'); [textFilePaths] maps overlay id to a UTF-8 text
 /// file holding that overlay's content — a file avoids every drawtext
@@ -119,6 +121,7 @@ ExportCommand buildExportCommand({
   ExportMusic? music,
   required double aspectRatio,
   required ExportQuality quality,
+  int fps = defaultExportFps,
   required VideoEncoder encoder,
   required String outputPath,
   required Map<String, String> fontPaths,
@@ -126,6 +129,9 @@ ExportCommand buildExportCommand({
 }) {
   if (clips.isEmpty) {
     throw ArgumentError('buildExportCommand needs at least one clip');
+  }
+  if (fps < 1 || fps > 120) {
+    throw ArgumentError.value(fps, 'fps', 'must be between 1 and 120');
   }
   final (w, h) = exportDimensions(aspectRatio, quality.shortSide);
   final n = clips.length;
@@ -136,7 +142,7 @@ ExportCommand buildExportCommand({
   for (var i = 0; i < n; i++) {
     final c = clips[i];
     if (c.isPhoto) {
-      inputs.addAll(['-loop', '1', '-framerate', '$exportFps', '-t', _sec(durs[i]), '-i', c.path]);
+      inputs.addAll(['-loop', '1', '-framerate', '$fps', '-t', _sec(durs[i]), '-i', c.path]);
     } else {
       inputs.addAll(['-i', c.path]);
     }
@@ -157,7 +163,7 @@ ExportCommand buildExportCommand({
       v.add('trim=start=${_sec(c.trimStartMs)}:end=${_sec(c.trimEndMs)},setpts=PTS-STARTPTS');
     }
     v.addAll([
-      'fps=$exportFps',
+      'fps=$fps',
       'scale=$w:$h:force_original_aspect_ratio=decrease',
       'pad=$w:$h:(ow-iw)/2:(oh-ih)/2:color=black',
       'setsar=1',
@@ -260,9 +266,9 @@ ExportCommand buildExportCommand({
     '-filter_complex', f.join(';'),
     '-map', '[$cv]',
     '-map', '[$ao]',
-    ...encoderArgs(encoder, quality.videoBitrate),
+    ...encoderArgs(encoder, exportVideoBitrate(quality, fps)),
     '-pix_fmt', 'yuv420p',
-    '-r', '$exportFps',
+    '-r', '$fps',
     '-c:a', 'aac',
     '-b:a', '192k',
     '-ar', '$audioRate',

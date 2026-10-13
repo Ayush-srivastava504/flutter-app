@@ -32,4 +32,16 @@ assert abs(dur-Dm)<80, ('duration mismatch',dur,Dm)
 assert (vs['width'],vs['height'])==(W,H)
 assert {x['codec_type'] for x in p['streams']}=={'video','audio'}
 print('OK: export graph renders; duration, size and streams match')
+# F5: other resolutions / frame rates through the same graph
+for short,fps,bps in ((480,24,'2500k'),(720,60,'7500k')):
+    out=f'out_{short}_{fps}.mp4'
+    a,Dx,(Wx,Hx)=build_export(clips,ov,music,9/16,short,out,['-c:v','libx264','-preset','veryfast','-b:v',bps],fonts,tf,fps=fps)
+    r=subprocess.run(['ffmpeg']+a,capture_output=True,text=True)
+    if r.returncode: print(r.stderr[-2500:]); sys.exit(1)
+    q=json.loads(subprocess.run(f"ffprobe -v error -show_entries format=duration:stream=codec_type,width,height,r_frame_rate -of json {out}",shell=True,capture_output=True,text=True).stdout)
+    v=[x for x in q['streams'] if x['codec_type']=='video'][0]
+    assert (v['width'],v['height'])==(Wx,Hx), ('size',v['width'],v['height'],Wx,Hx)
+    assert v['r_frame_rate']==f'{fps}/1', ('fps',v['r_frame_rate'])
+    assert abs(float(q['format']['duration'])*1000-Dx)<80, ('duration',q['format']['duration'],Dx)
+    print(f'OK: {short}p @ {fps} fps renders ({Wx}x{Hx}, {v["r_frame_rate"]})')
 for t in (0.5,3.2,5.8,8.0): sh(f"ffmpeg -y -ss {t} -i out.mp4 -frames:v 1 f{t}.png")

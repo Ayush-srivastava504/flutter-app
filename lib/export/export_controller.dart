@@ -55,7 +55,7 @@ class ExportController extends StateNotifier<ExportState> {
 
   ExportController(this._service, this._notifier, this._gallery, this.projectId) : super(const ExportState());
 
-  Future<void> start(ExportQuality quality) async {
+  Future<void> start(ExportQuality quality, {int fps = defaultExportFps}) async {
     if (state.phase == ExportPhase.running) return;
     state = const ExportState(phase: ExportPhase.running);
     await _notifier.init();
@@ -64,6 +64,7 @@ class ExportController extends StateNotifier<ExportState> {
       final file = await _service.export(
         projectId: projectId,
         quality: quality,
+        fps: fps,
         onProgress: (v) {
           if (!mounted) return;
           state = state.copyWith(progress: v);

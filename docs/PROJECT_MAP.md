@@ -83,7 +83,7 @@ Idea: a widget does `ref.watch(clipsProvider(id))` and redraws itself whenever t
 | `media_asset.dart` | A picked photo/video before it becomes a clip: path, duration, size, rotation, thumbnail. |
 | `audio_asset.dart` | A picked music file: path, duration, name. |
 | `bundled_track.dart` | The 3 built-in music loops and their lengths. |
-| `clip_x.dart` | Timeline layout maths: where each clip starts/ends, and "which clip is under the playhead" (`layoutTimeline`, `positionAt`). |
+| `clip_x.dart` | Timeline layout maths: where each clip starts/ends, and "which clip is under the playhead" (`layoutTimeline`, `positionAt`), plus the F4 playhead helpers (boundaries, frame step, snap, timecode). |
 | `color_filter_x.dart` | Brightness/contrast/saturation → colour matrix for the preview, plus the filter presets. |
 | `transition_x.dart` | Transition preview maths (how the thumbnail cross-fade looks near a boundary). |
 | `text_overlay_x.dart` | Text-overlay maths: visible at time T?, font presets, letterbox position/drag mapping. |
@@ -114,7 +114,8 @@ Idea: a widget does `ref.watch(clipsProvider(id))` and redraws itself whenever t
 | `timeline\timeline_strip.dart` | The row of clip thumbnails: long-press to reorder, pinch to zoom. |
 | `timeline\timeline_clip_tile.dart` | One thumbnail tile + the transition button between tiles. |
 | `timeline\timeline_scrub_bar.dart` | The bar you drag to move the playhead. |
-| `timeline\trim_panel.dart` | Trim handles, split at playhead, delete, mute/volume for the selected clip. |
+| `timeline\playhead_controls.dart` | F4: previous/next clip, ±1 frame, timecode and snap toggle under the scrub bar; also `seekTimeline`, the one way the playhead is moved. |
+| `timeline\trim_panel.dart` | Trim handles, split at playhead, duplicate (F2), delete, mute/volume for the selected clip. |
 | `timeline\filter_panel.dart` | Brightness/contrast/saturation sliders, preset chips, "apply to all". |
 | `timeline\audio_track_panel.dart` | Music trim, offset, volume, remove. |
 | `timeline\audio_track_lane.dart` | The thin lane showing where the music sits on the timeline. |
@@ -124,7 +125,7 @@ Idea: a widget does `ref.watch(clipsProvider(id))` and redraws itself whenever t
 ### `lib\export\` — turning the project into an MP4
 | File | Does |
 |---|---|
-| `export_models.dart` | Plain data types: `ExportQuality` (720p/1080p), `ExportClip`, `ExportOverlay`, `ExportMusic`, `VideoEncoder`, `ExportFailure(Kind)`. |
+| `export_models.dart` | Plain data types: `ExportQuality` (480p/720p/1080p), `exportFpsOptions`/`defaultExportFps` (24/30/60), `ExportClip`, `ExportOverlay`, `ExportMusic`, `VideoEncoder`, `ExportFailure(Kind)`. |
 | `export_inputs.dart` | Converts database rows into those plain types; decides photo vs video by file extension. |
 | `export_command_builder.dart` | **The heart:** builds the long FFmpeg command (trim, scale, filters, transitions, text, music, encoder). Pure code, fully tested. `EDIT` |
 | `export_engine.dart` | The only file that touches FFmpegKit: runs the command, collects the log and progress, can cancel. Never hangs now if FFmpeg fails to start. |

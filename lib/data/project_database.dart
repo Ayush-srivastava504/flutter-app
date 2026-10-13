@@ -5,8 +5,11 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show listEquals, visibleForTesting;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 part 'project_database.g.dart';
+
+const _uuid = Uuid();
 
 /// A Project is the top-level container for one editing session.
 class Projects extends Table {
@@ -196,6 +199,17 @@ class ProjectDatabase extends _$ProjectDatabase {
 
   Future<List<Project>> allProjects() => select(projects).get();
 
+  /// Every clip in every project, regardless of `projectId` — unlike
+  /// [watchClips], which is scoped to one project's timeline. Used by
+  /// `MediaRepairService`'s one-time cache-to-documents repair pass
+  /// (P1), which has to sweep the whole database, not just the
+  /// currently open project.
+  Future<List<Clip>> allClipsAcrossProjects() => select(clips).get();
+
+  /// Every audio track in every project. See [allClipsAcrossProjects].
+  Future<List<AudioTrack>> allAudioTracksAcrossProjects() =>
+      select(audioTracks).get();
+
   Future<Project?> getProject(String id) =>
       (select(projects)..where((t) => t.id.equals(id))).getSingleOrNull();
 
@@ -238,6 +252,76 @@ class ProjectDatabase extends _$ProjectDatabase {
 
   Future<int> insertProject(ProjectsCompanion project) =>
       into(projects).insert(project);
+
+  // --- Project management (F1: rename / delete / duplicate) ----------
+
+  /// Renames [id]'s project and bumps `updatedAt` (same convention as
+  /// [touchProject]). No-op if the project no longer exists.
+  Future<void> renameProject(String id, String newName) =>
+      (update(projects)..where((t) => t.id.equals(id))).write(
+        ProjectsCompanion(name: Value(newName), updatedAt: Value(DateTime.now())),
+      );
+
+  /// Deletes a project and every row that belongs to it (Clips,
+  /// AudioTracks, TextOverlays) in one transaction. SQLite's
+  /// `references(...)` columns are **not** enforced here (see
+  /// `docs/FACTS.md` F-44), so without this cascade, deleting just the
+  /// `Projects` row would leave orphan child rows behind forever.
+  /// Does not touch `AppPrefs.lastProjectId` — the caller (Home screen)
+  /// clears that if it matches, since `AppPrefs` lives outside the DB.
+  Future<void> deleteProjectCascade(String id) => transaction(() async {
+        await (delete(clips)..where((t) => t.projectId.equals(id))).go();
+        await (delete(audioTracks)..where((t) => t.projectId.equals(id))).go();
+        await (delete(textOverlays)..where((t) => t.projectId.equals(id))).go();
+        await (delete(projects)..where((t) => t.id.equals(id))).go();
+      });
+
+  /// Copies [id]'s project row plus every Clip/AudioTrack/TextOverlay
+  /// that belongs to it, each with a fresh id, so the duplicate edits
+  /// completely independently of the original (new undo history, moving
+  /// a clip in one never touches the other). Source media is referenced,
+  /// not copied — the duplicate's clips/audio point at the same
+  /// `sourceUri` files as the original, same as a split clip reusing its
+  /// parent's source (see `splitClip`).
+  ///
+  /// [newProjectId] lets tests/callers control the new id; otherwise one
+  /// is generated. Returns the new project's id, or null if [id] doesn't
+  /// exist.
+  Future<String?> duplicateProject(String id, {String? newProjectId}) async {
+    final original = await getProject(id);
+    if (original == null) return null;
+
+    final snapshot = await snapshotProject(id);
+    final newId = newProjectId ?? _uuid.v4();
+    final now = DateTime.now();
+
+    await transaction(() async {
+      await into(projects).insert(ProjectsCompanion.insert(
+        id: newId,
+        name: '${original.name} (copy)',
+        aspectRatio: Value(original.aspectRatio),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      for (final c in snapshot.clips) {
+        await into(clips).insert(
+          c.copyWith(id: _uuid.v4(), projectId: newId).toCompanion(false),
+        );
+      }
+      for (final a in snapshot.audioTracks) {
+        await into(audioTracks).insert(
+          a.copyWith(id: _uuid.v4(), projectId: newId).toCompanion(false),
+        );
+      }
+      for (final o in snapshot.overlays) {
+        await into(textOverlays).insert(
+          o.copyWith(id: _uuid.v4(), projectId: newId).toCompanion(false),
+        );
+      }
+    });
+
+    return newId;
+  }
 
   Stream<List<Clip>> watchClips(String projectId) =>
       (select(clips)
@@ -370,8 +454,13 @@ class ProjectDatabase extends _$ProjectDatabase {
             .write(ClipsCompanion(orderIndex: Value(later.orderIndex + 1)));
       }
 
-      await (update(clips)..where((c) => c.id.equals(clipId)))
-          .write(ClipsCompanion(trimEndMs: Value(splitAbsoluteMs)));
+      // The first half now ends at the split point and hands the transition
+      // *into* the second half off to that second half; it becomes a plain
+      // cut at the new boundary so export doesn't fade/dissolve into itself
+      // (B-02). The second half inherits the original's outgoing transition.
+      await (update(clips)..where((c) => c.id.equals(clipId))).write(
+        ClipsCompanion(trimEndMs: Value(splitAbsoluteMs), transitionOut: const Value('cut')),
+      );
 
       await into(clips).insert(ClipsCompanion.insert(
         id: newId,
@@ -388,7 +477,59 @@ class ProjectDatabase extends _$ProjectDatabase {
         contrast: Value(original.contrast),
         saturation: Value(original.saturation),
         muted: Value(original.muted),
+        // B-01: these were previously dropped, so the second half silently
+        // reset to volume 1.0 and lost its look/filter preset.
+        volume: Value(original.volume),
+        filterPreset: Value(original.filterPreset),
       ));
+    });
+  }
+
+  /// F2: inserts a copy of [clipId] immediately after it (orderIndex + 1)
+  /// and shifts every later clip down by one, so orderIndex stays
+  /// contiguous 0..n-1. One transaction, so the UI (and undo history) never
+  /// sees a half-shifted timeline.
+  ///
+  /// Every column is copied (trim, filter, volume, mute, thumbnail,
+  /// rotation, ...) via `copyWith`, so a column added to `Clips` later is
+  /// carried over automatically. The source file is referenced, not copied
+  /// — same as `splitClip`.
+  ///
+  /// Transition: the original now leads into its own copy, so it becomes a
+  /// plain `cut` and the copy inherits the original's outgoing transition
+  /// (same rule as `splitClip`, B-02).
+  ///
+  /// Text overlays and music are positioned in absolute timeline ms and are
+  /// not remapped, exactly as for delete/reorder/split: the later part of
+  /// the timeline moves right by the copy's length, they do not.
+  ///
+  /// [newClipId] lets tests/callers control the new id; otherwise one is
+  /// generated. Returns the new clip's id, or null if [clipId] doesn't exist.
+  Future<String?> duplicateClip(String clipId, {String? newClipId}) {
+    return transaction(() async {
+      final original = await getClip(clipId);
+      if (original == null) return null;
+      final newId = newClipId ?? _uuid.v4();
+
+      final laterClips = await (select(clips)
+            ..where((c) =>
+                c.projectId.equals(original.projectId) &
+                c.orderIndex.isBiggerThanValue(original.orderIndex)))
+          .get();
+      for (final later in laterClips) {
+        await (update(clips)..where((c) => c.id.equals(later.id)))
+            .write(ClipsCompanion(orderIndex: Value(later.orderIndex + 1)));
+      }
+
+      await (update(clips)..where((c) => c.id.equals(clipId)))
+          .write(const ClipsCompanion(transitionOut: Value('cut')));
+
+      await into(clips).insert(
+        original
+            .copyWith(id: newId, orderIndex: original.orderIndex + 1)
+            .toCompanion(false),
+      );
+      return newId;
     });
   }
 

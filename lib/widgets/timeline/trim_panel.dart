@@ -8,7 +8,7 @@ import '../../models/clip_x.dart';
 import '../../providers/timeline_providers.dart';
 
 /// Shown whenever a clip is selected: draggable trim handles over that
-/// clip's full source duration, plus split-at-playhead and delete.
+/// clip's full source duration, plus split-at-playhead, duplicate and delete.
 /// Non-destructive per the Phase 4 spec — every drag here only rewrites
 /// trimStartMs/trimEndMs on the Clips row, never touches the source file;
 /// compositing happens later, at export (Phase 8).
@@ -75,6 +75,12 @@ class _TrimPanelState extends ConsumerState<TrimPanel> {
         .splitClip(widget.clip.id, splitAtTrimmedMs, const Uuid().v4());
   }
 
+  /// F2: inserts a copy of this clip right after it (see
+  /// `ProjectDatabase.duplicateClip`). Selection stays on the original.
+  Future<void> _duplicate() async {
+    await ref.read(projectDatabaseProvider).duplicateClip(widget.clip.id);
+  }
+
   Future<void> _delete() async {
     await ref
         .read(projectDatabaseProvider)
@@ -135,6 +141,11 @@ class _TrimPanelState extends ConsumerState<TrimPanel> {
                 icon: const Icon(Icons.content_cut, color: Colors.white70),
                 tooltip: 'Split at playhead',
                 onPressed: _split,
+              ),
+              IconButton(
+                icon: const Icon(Icons.content_copy, color: Colors.white70),
+                tooltip: 'Duplicate clip',
+                onPressed: _duplicate,
               ),
               IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.redAccent),

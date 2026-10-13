@@ -8,28 +8,40 @@ import 'package:path_provider/path_provider.dart';
 import '../models/audio_asset.dart';
 import '../models/bundled_track.dart';
 import 'audio_metadata_service.dart';
+import 'media_storage_service.dart';
 
 /// Turning a music file — from device storage, or from the bundled
 /// royalty-free library — into an [AudioAsset] ready to attach to the
 /// project as its background `AudioTrack`.
 class AudioImportService {
   final AudioMetadataService _metadataService = AudioMetadataService();
+  final MediaStorageService _storageService;
+
+  AudioImportService({MediaStorageService? storageService})
+      : _storageService = storageService ?? MediaStorageService();
 
   /// Opens the system file picker filtered to audio files. Returns null
   /// if the user cancels. `file_picker` (a project dependency since
   /// Phase 2) already ships an audio filter, so no new package was
   /// needed for this half.
+  ///
+  /// P1: some `file_picker` implementations also hand back a path in
+  /// the OS-clearable cache dir (`docs/FACTS.md` F-50 covers the
+  /// `image_picker` case; `file_picker`'s Android path can land in the
+  /// same place), so this copies into documents the same way
+  /// `MediaImportService.pickVideo`/`pickPhoto` do.
   Future<AudioAsset?> pickFromDevice() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.audio);
     final picked = result?.files.single;
     final path = picked?.path;
     if (path == null) return null;
 
+    final persistedPath = await _storageService.persistToDocuments(path);
     final duration =
-        await _metadataService.readDuration(path) ?? Duration.zero;
+        await _metadataService.readDuration(persistedPath) ?? Duration.zero;
 
     return AudioAsset(
-      uri: path,
+      uri: persistedPath,
       duration: duration,
       displayName: picked!.name,
     );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app/launch_gate.dart' show appPrefsProvider;
 import '../export/export_command_builder.dart';
 import '../export/export_controller.dart';
 import '../export/export_inputs.dart';
@@ -20,6 +21,27 @@ class ExportScreen extends ConsumerStatefulWidget {
 
 class _ExportScreenState extends ConsumerState<ExportScreen> {
   ExportQuality _quality = ExportQuality.p1080;
+  int _fps = defaultExportFps;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedChoices();
+  }
+
+  /// F5: reopen on whatever the user exported with last time.
+  Future<void> _loadSavedChoices() async {
+    final prefs = ref.read(appPrefsProvider);
+    final quality = ExportQuality.tryParse(await prefs.exportQualityName);
+    final fps = sanitizeExportFps(await prefs.exportFps);
+    if (!mounted) return;
+    setState(() {
+      if (quality != null) _quality = quality;
+      _fps = fps;
+    });
+  }
+
+  void _saveChoices() => ref.read(appPrefsProvider).setExportSettings(qualityName: _quality.name, fps: _fps);
 
   @override
   Widget build(BuildContext context) {
@@ -61,20 +83,42 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
 
   Widget _picker(int durationMs, ExportController controller) {
     final seconds = (durationMs / 1000).toStringAsFixed(1);
-    final mb = (estimatedExportBytes(_quality, durationMs) / 1e6).toStringAsFixed(0);
+    final mb = (estimatedExportBytes(_quality, durationMs, fps: _fps) / 1e6).toStringAsFixed(0);
+    final heavy = _fps >= 60 && _quality == ExportQuality.p1080;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text('Resolution', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 12),
       SegmentedButton<ExportQuality>(
         segments: [for (final q in ExportQuality.values) ButtonSegment(value: q, label: Text(q.label))],
         selected: {_quality},
-        onSelectionChanged: (s) => setState(() => _quality = s.first),
+        onSelectionChanged: (s) {
+          setState(() => _quality = s.first);
+          _saveChoices();
+        },
       ),
+      const SizedBox(height: 20),
+      Text('Frame rate', style: Theme.of(context).textTheme.titleMedium),
+      const SizedBox(height: 12),
+      SegmentedButton<int>(
+        segments: [for (final f in exportFpsOptions) ButtonSegment(value: f, label: Text('$f fps'))],
+        selected: {_fps},
+        onSelectionChanged: (s) {
+          setState(() => _fps = s.first);
+          _saveChoices();
+        },
+      ),
+      if (heavy) ...[
+        const SizedBox(height: 8),
+        const Text(
+          '1080p at 60 fps is demanding. If the export fails, try 30 fps or 720p.',
+          style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
+        ),
+      ],
       const SizedBox(height: 16),
       Text('$seconds s • about $mb MB', style: const TextStyle(color: Colors.white60)),
       const SizedBox(height: 24),
       FilledButton.icon(
-        onPressed: () => controller.start(_quality),
+        onPressed: () => controller.start(_quality, fps: _fps),
         icon: const Icon(Icons.movie_filter_outlined),
         label: const Text('Export video'),
       ),
@@ -135,7 +179,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       const SizedBox(height: 8),
       Text(f?.message ?? failureMessage(ExportFailureKind.unknown), textAlign: TextAlign.center),
       const SizedBox(height: 24),
-      FilledButton(onPressed: () => controller.start(_quality), child: const Text('Try again')),
+      FilledButton(onPressed: () => controller.start(_quality, fps: _fps), child: const Text('Try again')),
       if (f?.detail != null)
         TextButton.icon(
           onPressed: () async {

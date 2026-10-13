@@ -67,6 +67,7 @@ flutter:
     - assets/images/
     - assets/audio/
     - assets/fonts/
+    - assets/dev/
 
 dependency_overrides:
   video_thumbnail:

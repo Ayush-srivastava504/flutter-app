@@ -10,7 +10,7 @@ Rules for Claude:
 4. Args are passed to FFmpegKit as a **list** (`executeWithArgumentsAsync`), so there is no shell: do not add shell quoting around the filtergraph; use FFmpeg's own `'single quotes'` only *inside* filter option values, as the builder does.
 
 ## 1. The existing export graph (read from `export_command_builder.dart`)
-Per clip: `trim → setpts → fps=30 → scale(decrease) → pad → setsar=1 → eq (only if sliders ≠ 0) → format=yuv420p → fade in/out (fade transitions) → settb=AVTB`.
+Per clip: `trim → setpts → fps=<fps> → scale(decrease) → pad → setsar=1 → eq (only if sliders ≠ 0) → format=yuv420p → fade in/out (fade transitions) → settb=AVTB`.
 Audio per clip: `atrim → asetpts → aresample=44100 → aformat(fltp, stereo) → volume` (or `anullsrc` for photos/silent clips).
 Join: `concat` (cut/fade) or `xfade=transition=fade` + `acrossfade` (dissolve; output shortens by the overlap).
 Then: `drawtext` per text overlay → music `atrim/…/adelay` → `amix=inputs=2:duration=first:normalize=0` → `alimiter=limit=0.97`.
@@ -41,7 +41,7 @@ Legend — Desktop: ✅ ran OK. Phone: ⚠️ not run on a phone / FFmpegKit bui
 | F23 keyframe-style expression | `drawtext=…:x='if(lt(t,1),10,if(lt(t,2),10+(t-1)*100,110))'` | ✅ | ⚠️ | Commas inside the quoted expression are fine when the whole filtergraph is one argument. |
 | F25 chroma key | `chromakey=color=0x00FF00:similarity=0.15:blend=0.1,format=yuva420p` | ✅ | ⚠️ | Looks not judged (synthetic input). |
 | F19 ducking | `[0:a]asplit=2[sc][mix];[1:a][sc]sidechaincompress=threshold=0.05:ratio=8[duck];[duck][mix]amix=inputs=2:normalize=0` | ✅ | ⚠️ | Tested with two sine inputs (a first attempt with a malformed graph of mine failed; this version passed). Threshold/ratio untuned. |
-| F5 60 fps | `fps=60` | ✅ | ⚠️ | Also change `-r` and the `-framerate` for photos. Hardware encoder at 1080p60 may fail on weak phones → fallback. |
+| F5 60 fps | `fps=60` | ✅ | ⚠️ | Shipped 2026-10-13 as the `fps` parameter of `buildExportCommand` (24/30/60): drives `fps=`, `-r` and the photo `-framerate`. `tools/verify_export_graph.py` rendered 480p@24 and 720p@60 on desktop FFmpeg 6.1.1 (ran 2026-10-13). Hardware encoder at 1080p60 may fail on weak phones → fallback; not tried on a phone. |
 | F13 transitions | `xfade=transition=<name>` for `slideleft`, `wipeleft`, `circleopen`, `zoomin`, `fadeblack`, `dissolve` | ✅ all 6 | ⚠️ | Existing code uses `transition=fade`. Unknown names must fall back to `fade` (never fail the export). |
 
 ## 3. Known export limits (from code, FACTS §6)

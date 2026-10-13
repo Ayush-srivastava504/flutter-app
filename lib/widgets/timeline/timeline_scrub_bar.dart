@@ -15,17 +15,26 @@ class TimelineScrubBar extends StatelessWidget {
   final int playheadMs;
   final ValueChanged<int> onScrub;
 
+  /// F4: when true, a scrub that lands within [snapThresholdPx] of a clip
+  /// edge (or the end of the timeline) is moved onto that edge.
+  final bool snapEnabled;
+
   const TimelineScrubBar({
     super.key,
     required this.layout,
     required this.totalMs,
     required this.playheadMs,
     required this.onScrub,
+    this.snapEnabled = false,
   });
+
+  static const double snapThresholdPx = 10;
 
   @override
   Widget build(BuildContext context) {
     if (totalMs <= 0) return const SizedBox(height: 28);
+
+    final boundaries = snapEnabled ? clipBoundariesMs(layout) : const <int>[];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -33,7 +42,12 @@ class TimelineScrubBar extends StatelessWidget {
 
         void handleDrag(Offset localPosition) {
           final fraction = (localPosition.dx / width).clamp(0.0, 1.0);
-          onScrub((fraction * totalMs).round());
+          var ms = (fraction * totalMs).round();
+          if (snapEnabled) {
+            final thresholdMs = (snapThresholdPx / width * totalMs).round();
+            ms = snapToBoundaryMs(boundaries, ms, thresholdMs);
+          }
+          onScrub(ms);
         }
 
         return GestureDetector(

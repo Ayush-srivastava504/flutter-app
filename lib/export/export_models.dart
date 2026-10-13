@@ -4,7 +4,11 @@ library export_models;
 
 /// Output quality presets. [shortSide] is the shorter edge of the rendered
 /// frame; the longer edge follows the project's aspect ratio.
+///
+/// [videoBitrate] is the bits/s used at [defaultExportFps]; use
+/// [exportVideoBitrate] to get the value for a chosen frame rate.
 enum ExportQuality {
+  p480('480p', 480, 2500000),
   p720('720p', 720, 5000000),
   p1080('1080p', 1080, 10000000);
 
@@ -12,7 +16,33 @@ enum ExportQuality {
   final int shortSide;
   final int videoBitrate;
   const ExportQuality(this.label, this.shortSide, this.videoBitrate);
+
+  /// Parses a stored [name] (as saved in app prefs); null if unknown, so a
+  /// stale or corrupt preference falls back to the default instead of crashing.
+  static ExportQuality? tryParse(String? name) {
+    for (final q in values) {
+      if (q.name == name) return q;
+    }
+    return null;
+  }
 }
+
+/// Frame rate used when the user has not picked one (and by old exports).
+const int defaultExportFps = 30;
+
+/// Frame rates offered in the export picker.
+const List<int> exportFpsOptions = [24, 30, 60];
+
+/// [fps] if it is one of [exportFpsOptions], otherwise [defaultExportFps].
+/// Used when reading a saved preference.
+int sanitizeExportFps(int? fps) =>
+    fps != null && exportFpsOptions.contains(fps) ? fps : defaultExportFps;
+
+/// Video bitrate (bits/s) for [quality] at [fps]. 60 fps carries twice the
+/// frames per second, so it gets 1.5x the base bitrate; 24 and 30 fps use the
+/// base value. Shared by the encoder arguments and the size estimate.
+int exportVideoBitrate(ExportQuality quality, int fps) =>
+    fps >= 60 ? quality.videoBitrate * 3 ~/ 2 : quality.videoBitrate;
 
 /// One timeline clip, flattened to exactly what rendering needs.
 class ExportClip {

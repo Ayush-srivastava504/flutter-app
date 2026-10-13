@@ -6,6 +6,7 @@ import 'package:video_player/video_player.dart';
 
 import '../models/media_asset.dart';
 import 'media_metadata_service.dart';
+import 'media_storage_service.dart';
 import 'thumbnail_service.dart';
 
 /// Phase 3: pulling a clip out of the gallery and turning it into a
@@ -16,18 +17,29 @@ import 'thumbnail_service.dart';
 /// come from [MediaMetadataService] and [ThumbnailService] respectively —
 /// both run after the controller initializes, so a slow probe/thumbnail
 /// never delays getting *something* onto the preview.
+///
+/// P1 (`docs/FEATURE_PLAN_25.md` §1): the file `image_picker` hands back
+/// lives in the OS-clearable cache dir (`docs/FACTS.md` F-50), so before
+/// anything else runs, [MediaStorageService] copies it into the app's
+/// documents dir and every later step (probing, thumbnailing, the
+/// [MediaAsset] itself) works off that durable copy instead.
 class MediaImportService {
   final ImagePicker _picker = ImagePicker();
   final Uuid _uuid = const Uuid();
   final ThumbnailService _thumbnailService = ThumbnailService();
   final MediaMetadataService _metadataService = MediaMetadataService();
+  final MediaStorageService _storageService;
+
+  MediaImportService({MediaStorageService? storageService})
+      : _storageService = storageService ?? MediaStorageService();
 
   /// Opens the gallery filtered to videos. Returns null if the user
   /// cancels the picker.
   Future<MediaAsset?> pickVideo() async {
     final XFile? file = await _picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return null;
-    return _buildVideoAsset(file.path);
+    final persistedPath = await _storageService.persistToDocuments(file.path);
+    return _buildVideoAsset(persistedPath);
   }
 
   /// Opens the gallery filtered to photos. Returns null if the user
@@ -35,7 +47,8 @@ class MediaImportService {
   Future<MediaAsset?> pickPhoto() async {
     final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
     if (file == null) return null;
-    return _buildPhotoAsset(file.path);
+    final persistedPath = await _storageService.persistToDocuments(file.path);
+    return _buildPhotoAsset(persistedPath);
   }
 
   Future<MediaAsset> _buildVideoAsset(String path) async {

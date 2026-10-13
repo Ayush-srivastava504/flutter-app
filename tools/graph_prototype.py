@@ -21,11 +21,11 @@ def boundary(clips, i):
         t=min(FADE_T,a//2,b//2); return ('fade',t) if t>=50 else ('cut',0)
     return ('cut',0)
 
-def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, textfiles, music_path=None):
+def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, textfiles, music_path=None, fps=FPS):
     W,H=dims(aspect,short); n=len(clips); args=[]; inputs=[]
     durs=[c['end']-c['start'] for c in clips]
     for c,d in zip(clips,durs):
-        if c['photo']: inputs += ['-loop','1','-framerate',str(FPS),'-t',sec(d),'-i',c['path']]
+        if c['photo']: inputs += ['-loop','1','-framerate',str(fps),'-t',sec(d),'-i',c['path']]
         else: inputs += ['-i',c['path']]
     if music: inputs += ['-i',music['path']]
     bounds=[boundary(clips,i) for i in range(n)]
@@ -33,7 +33,7 @@ def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, tex
     for i,c in enumerate(clips):
         d=durs[i]; ch=[]
         if not c['photo']: ch.append(f"trim=start={sec(c['start'])}:end={sec(c['end'])},setpts=PTS-STARTPTS")
-        ch += [f"fps={FPS}", f"scale={W}:{H}:force_original_aspect_ratio=decrease",
+        ch += [f"fps={fps}", f"scale={W}:{H}:force_original_aspect_ratio=decrease",
                f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black","setsar=1"]
         b,ct,s=c.get('brightness',0),c.get('contrast',0),c.get('saturation',0)
         if b or ct or s: ch.append(f"eq=brightness={b:.3f}:contrast={1+ct:.3f}:saturation={1+s:.3f}")
@@ -88,5 +88,5 @@ def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, tex
         f.append(f"[{ca}][mus]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.97[aout]")
         ao='aout'
     args=['-y']+inputs+['-filter_complex',';'.join(f),'-map',f'[{cv}]','-map',f'[{ao}]']+encoder+[
-        '-pix_fmt','yuv420p','-r',str(FPS),'-c:a','aac','-b:a','192k','-ar',str(AR),'-movflags','+faststart',out]
+        '-pix_fmt','yuv420p','-r',str(fps),'-c:a','aac','-b:a','192k','-ar',str(AR),'-movflags','+faststart',out]
     return args,D,(W,H)

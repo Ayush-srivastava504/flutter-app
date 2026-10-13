@@ -27,8 +27,8 @@ Written so that **one feature = one Claude session**. Read `docs/APP_GUIDE.md` f
 | ID | What | Why it comes first |
 |---|---|---|
 | **P0** | **Make export work on a real phone.** Follow APP_GUIDE section 8 ("find the real cause in 2 minutes"), paste the copied error to Claude, fix, export a 1-clip, then a 3-clip project. | 14 of the 25 features need export. Building on an unproven export multiplies bugs. |
-| **P1** | **Copy imported media into the app's documents folder** (`lib/services/media_import_service.dart`, `audio_import_service.dart`). The picker currently leaves files in the cache folder, which Android can clear → "source missing" at export. Keep the original path out of the DB; store the copy's path. Add a one-time repair for existing rows (if `sourceUri` is in cache and exists, copy it and update the row). | Prevents the most likely random export failure. Tiny change, huge reliability gain. |
-| **P2** | **A fixture project for fast testing:** a debug-only button on Home ("Load sample project") that creates a project from 2 short videos + 1 photo + music bundled in `assets/dev/`. | Saves minutes on every manual test of every feature below. |
+| **P1** ✅ 2026-10-11 | **Copy imported media into the app's documents folder** (`lib/services/media_import_service.dart`, `audio_import_service.dart`). The picker currently leaves files in the cache folder, which Android can clear → "source missing" at export. Keep the original path out of the DB; store the copy's path. Add a one-time repair for existing rows (if `sourceUri` is in cache and exists, copy it and update the row). | Prevents the most likely random export failure. Tiny change, huge reliability gain. |
+| **P2** ✅ 2026-10-12 | **A fixture project for fast testing:** a debug-only button on Home ("Load sample project") that creates a project from 2 short videos + 1 photo + music bundled in `assets/dev/`. Shipped as a `kDebugMode`-gated 🐛 icon in Home's app bar; see `lib/services/sample_project_service.dart`. The music track reuses the existing bundled library (`BundledTrack`) rather than a 4th `assets/dev/` audio file — see that file's doc comment for why. | Saves minutes on every manual test of every feature below. |
 
 ---
 
@@ -65,10 +65,11 @@ Written so that **one feature = one Claude session**. Read `docs/APP_GUIDE.md` f
 - *Done when:* deleting the resume-card project removes the card; a duplicate edits independently; tests for delete cascade and duplicate id remapping.
 - *Risk:* forgetting a table when deleting leaves orphan rows → test with a project that has clips, music and text.
 
-**F2 · Duplicate clip** — A · S
+**F2 · Duplicate clip** ✅ 2026-10-13 — A · S
 - *User sees:* "Duplicate" in the trim panel; the copy appears right after the original.
 - *Work:* `ProjectDatabase.duplicateClip` (new id, orderIndex+1, shift later clips, one transaction). Files: `project_database.dart`, `trim_panel.dart`.
 - *Done when:* orderIndex stays contiguous 0..n-1; undo removes the copy; export renders both.
+- *Shipped:* `ProjectDatabase.duplicateClip` (copies every column via `copyWith`; original becomes `cut`, copy inherits the outgoing transition, same rule as `splitClip`), a `Icons.content_copy` button in `trim_panel.dart`, tests in `test/duplicate_clip_test.dart`. Text overlays/music are not remapped (same as delete/split).
 
 **F3 · Photo duration control** — A · S
 - *User sees:* selecting a photo clip shows a slider/stepper 1–15 s (default 3).
@@ -76,15 +77,17 @@ Written so that **one feature = one Claude session**. Read `docs/APP_GUIDE.md` f
 - *Export:* none (builder already uses `-t` from the clip duration).
 - *Done when:* changing the duration moves the timeline, text and music alignment, and the exported length matches.
 
-**F4 · Playhead tools** — A · S
+**F4 · Playhead tools** ✅ 2026-10-13 — A · S
 - *User sees:* buttons: previous clip / next clip / back 1 frame / forward 1 frame; optional "snap to clip edges" when scrubbing.
 - *Work:* pure helpers next to `layoutTimeline` (nearest boundary, frame step = 1000/30 ms) + tests; buttons in the editor controls. Files: `models/clip_x.dart`, `editor_screen.dart`, `timeline_scrub_bar.dart`.
 - *Done when:* helper tests cover first/last clip and empty timeline.
+- *Shipped:* helpers in `models/clip_x.dart`, `widgets/timeline/playhead_controls.dart` (buttons, timecode, snap toggle, shared `seekTimeline`), snap in `timeline_scrub_bar.dart`, `snapScrubProvider`, tests in `test/playhead_tools_test.dart`. Not done: hold-to-repeat on the frame buttons.
 
-**F5 · Export options: resolution and frame rate** — A/B · S
+**F5 · Export options: resolution and frame rate** ✅ 2026-10-13 — A/B · S
 - *User sees:* quality picker gets 480p / 720p / 1080p and 24 / 30 / 60 fps; last choice remembered.
 - *Work:* add `p480` to `ExportQuality`; replace the constant `exportFps` with a parameter of `buildExportCommand`; make the 3 `fps=`/`-r` places use it; store last choice in `AppPrefs`; update size estimate. Update `graph_prototype.py`. Files: `export_models.dart`, `export_command_builder.dart`, `export_screen.dart`, `app_prefs.dart`, tests.
 - *Risk:* 60 fps on the hardware encoder at 1080p may fail on weak phones; the existing encoder fallback should catch it. Test on a real device.
+- *Shipped:* `p480`; `fps` parameter on `buildExportCommand`/`ExportService.export`/`ExportController.start` (default 30, so old callers and old behaviour are unchanged); 60 fps bitrate ×1.5 (`exportVideoBitrate`, also used by the size estimate); last choice saved in `AppPrefs`; a hint under the pickers for 1080p@60. `graph_prototype.py` + `verify_export_graph.py` updated and run. Tests in `test/export_options_test.dart`.
 
 **F6 · Project aspect ratio picker** — A/B · M
 - *User sees:* chips 9:16, 16:9, 1:1, 4:5, 4:3 in the editor; preview canvas and export both change shape.

@@ -67,6 +67,8 @@ Run on at least **2 phones**: one recent (Android 14/15/16) and one low-end/olde
 | X2 | 3 clips + dissolve + text + music, 1080p | Completes; length = sum − dissolve overlaps; text/music aligned with picture |
 | X3 | Project with a photo + silent clip + clip with audio | No audio glitches; silent parts silent |
 | X4 | Cancel mid-export | Returns to idle; no crash; no partial file shown as success |
+| X6 | 1 clip + photo, 480p @ 24 fps (F5) | Completes; output is 480×854 (portrait), plays smoothly; size noticeably smaller than X1 |
+| X7 | 3 clips, 1080p @ 60 fps (F5) | Completes, or fails cleanly then falls back to `mpeg4` (see `scripts/dev.sh logs`); note which. Reopen the Export screen: last quality + fps are pre-selected |
 | X5 | Lock the screen / switch app for 30 s during a 1-min export | Either finishes or fails with a clear message (no foreground service yet — FACTS F-68) |
 | X6 | Almost-full storage | "Not enough free storage" message, not a generic crash |
 | X7 | Delete a source file from the gallery after import, then export | "Clip no longer on this device" message |

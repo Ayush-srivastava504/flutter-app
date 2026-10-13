@@ -52,15 +52,16 @@ Legend: ✅ verified (how is stated) · ⚠️ NOT verified · 🐞 known bug ·
 | F-42 ✅ | Undo/redo snapshots only Clips + AudioTracks + TextOverlays (`ProjectSnapshot`). **Projects row (name, aspect ratio) is not in undo.** | Read `ProjectSnapshot`, `restoreProject` |
 | F-43 ✅ | History: 450 ms debounce, 50-step limit; each capture re-reads **all** rows of the project. | Read `project_history.dart` |
 | F-44 ✅ | No `PRAGMA foreign_keys` / `beforeOpen` anywhere → the `references(...)` columns are **not enforced** by SQLite; deleting a project would leave orphan rows unless code deletes children. | `grep` in `lib/` |
-| F-45 ✅ | There is **no** rename/delete/duplicate project API and no UI for it (planned as F1). | `grep` + Read `home_screen.dart` |
+| F-45 ✅ | F1 shipped 2026-10-11: `ProjectDatabase.renameProject`/`deleteProjectCascade`/`duplicateProject` plus a ⋮ menu on each Home project card. Not yet run on a device/SDK (see note at the top of this file). | Read `project_database.dart`, `home_screen.dart`; `test/project_crud_test.dart` (not run, no SDK) |
 | F-46 ✅ | A project has **one** audio track (`getAudioTrack`/`watchSingleOrNull`). | Read |
 | F-47 ✅ | New projects are created as "Untitled Project" with the default aspect ratio 9/16; no aspect-ratio picker exists (planned as F6). | Read `home_screen.dart`, table default |
-| F-48 ✅ | App prefs are one JSON file `clipforge_prefs.json` in the documents dir (`onboardingDone`, `lastProjectId`). | Read `app_prefs.dart` |
+| F-48 ✅ | App prefs are one JSON file `clipforge_prefs.json` in the documents dir (`onboardingDone`, `lastProjectId`, and since 2026-10-13 `exportQuality` + `exportFps`). | Read `app_prefs.dart` |
+| F-49 ✅ | F2 shipped 2026-10-13: `ProjectDatabase.duplicateClip(clipId, {newClipId})` inserts a copy at orderIndex+1 and shifts later clips in one transaction; the original's `transitionOut` becomes `cut` and the copy inherits it. Button "Duplicate clip" in `TrimPanel`. Undo works through the existing Clips snapshot. Not run on a device/SDK. | Read `project_database.dart`, `trim_panel.dart`; `test/duplicate_clip_test.dart` (not run, no SDK) |
 
 ## 5. Import and storage
 | ID | Fact | Evidence |
 |---|---|---|
-| F-50 ✅ | `image_picker` copies picks into the app **cache** dir; the DB stores that cache path as `sourceUri`. Android may clear cache → "source missing" at export. (Plan item P1.) | Read `media_import_service.dart`; consistent with `APP_GUIDE.md` §12 |
+| F-50 ✅ | P1 shipped 2026-10-11: `image_picker`/`file_picker` still hand back a path in the OS-clearable cache dir, but `MediaImportService`/`AudioImportService` now copy it into `<documents>/imported_media/` via `MediaStorageService` before it's ever stored as `sourceUri`. A `MediaRepairService` sweep (run once per launch from `LaunchGate`) also repairs rows from projects imported before this pass, where the file still exists. Rows whose cache file is already gone can't be repaired and still fail export with "source missing" — same as before P1. ⚠️ Not run on a device (no SDK here); `isInCache`'s cache-dir detection (`getTemporaryDirectory()` + `getApplicationCacheDirectory()`) is unverified against where `image_picker`/`file_picker` actually place files on a real phone. | Read `media_storage_service.dart`, `media_repair_service.dart`, `media_import_service.dart`, `audio_import_service.dart`, `launch_gate.dart`; tests in `test/media_storage_service_test.dart`, `test/media_repair_service_test.dart` (not run, no SDK) |
 | F-51 ✅ | Import order per video: `VideoPlayerController.initialize()` → FFprobe rotation → thumbnail (sequential, on purpose). | Read `_buildVideoAsset` |
 | F-52 ✅ | Thumbnails: 320 px wide JPEG q75 cached in `<cache>/thumbnails/<name>_<mtime>.jpg`. Cache dir is also clearable by the OS. | Read `thumbnail_service.dart` |
 | F-53 ✅ | Timeline thumbnails decode at `cacheWidth: 240`; preview photos at 720/1440. | Read `timeline_clip_tile.dart:155`, `video_preview_player.dart:513,535` |
@@ -69,14 +70,14 @@ Legend: ✅ verified (how is stated) · ⚠️ NOT verified · 🐞 known bug ·
 ## 6. Export pipeline
 | ID | Fact | Evidence |
 |---|---|---|
-| F-60 ✅ | Quality presets: `p720` (short side 720, 5 Mbit/s) and `p1080` (1080, 10 Mbit/s). Fixed 30 fps, AAC 192 kbit/s @ 44.1 kHz, `+faststart`, `yuv420p`. | Read `export_models.dart`, `export_command_builder.dart` |
+| F-60 ✅ | Quality presets: `p480` (short side 480, 2.5 Mbit/s), `p720` (720, 5 Mbit/s) and `p1080` (1080, 10 Mbit/s); frame rate 24/30/60 (default 30), 60 fps uses 1.5× the base bitrate (`exportVideoBitrate`) (changed 2026-10-13, F5). AAC 192 kbit/s @ 44.1 kHz, `+faststart`, `yuv420p`. | Read `export_models.dart`, `export_command_builder.dart` |
 | F-61 ✅ | Encoder order: Android → `h264_mediacodec`, iOS → `h264_videotoolbox`, then `mpeg4` fallback (the non-GPL FFmpegKit build has no libx264). | Read `export_service.dart`, `export_models.dart` |
 | F-62 ✅ | If the first encoder fails, the next is tried unless the failure is *disk full* or *source missing*. | Read `export_service.dart` |
 | F-63 ✅ | Transitions supported in export: `cut`, `fade` (dip to black, ≤300 ms), `dissolve` (xfade `fade`, ≤600 ms, shortens output). Unknown names behave as `cut`. | Read `_boundaryAfter` |
 | F-64 ✅ | Text is rendered with `drawtext` from per-overlay **text files** (avoids escaping bugs); 4 bundled DejaVu fonts; alignment is not honoured (always centred on `positionX`). | Read builder + `export_service.dart` |
 | F-65 ✅ | Music is mixed with `amix … normalize=0` then `alimiter=limit=0.97`; offset is remapped after dissolves. | Read builder |
 | F-66 ✅ | Output goes to `<temp>/export_<ms>/ClipForge_<ms>.mp4`; export folders older than 1 day are pruned at the next export; saved to the gallery album `ClipForge` via `gal`. | Read `export_service.dart`, `gallery_share_service.dart` |
-| F-67 ✅ | **Ran** `tools/verify_export_graph.py` (the *Python* copy of the graph) on desktop FFmpeg 6.1.1: output 720×1280, 9.4 s, h264 + aac → "OK". This proves the filter graph logic, **not** the Dart builder, FFmpegKit, or the phone encoder. | Ran 2026-10-11 |
+| F-67 ✅ | **Ran** `tools/verify_export_graph.py` (the *Python* copy of the graph) on desktop FFmpeg 6.1.1: output 720×1280, 9.4 s, h264 + aac → "OK"; re-ran 2026-10-13 with F5, which also renders 480p@24 (480×854) and 720p@60 (720×1280) → "OK". This proves the filter graph logic, **not** the Dart builder, FFmpegKit, or the phone encoder. | Ran 2026-10-11 |
 | F-68 ✅ | The wake lock is held during export; there is **no** foreground service (planned F22). | Read `export_controller.dart`, manifest |
 
 ## 7. Preview / editor
@@ -86,6 +87,7 @@ Legend: ✅ verified (how is stated) · ⚠️ NOT verified · 🐞 known bug ·
 | F-71 ✅ | `EditorScreen._buildBody` calls `ref.watch(playheadMsProvider)` (`editor_screen.dart:366`) → the whole editor body rebuilds on every playhead tick. | Read |
 | F-72 ✅ | Preview and timeline are wrapped in `RepaintBoundary`. | Read `editor_screen.dart` |
 | F-73 ✅ | Navigation is plain `Navigator` with 3 routes: `/` (LaunchGate → onboarding or Home), `/editor`, `/export`. | Read `app_router.dart` |
+| F-74 ✅ | F4 shipped 2026-10-13: a `PlayheadControls` row under the scrub bar (previous/next clip, ±1 frame at 30 fps, `m:ss:ff` timecode, snap toggle). Pure helpers (`clipBoundariesMs`, `previousBoundaryMs`, `nextBoundaryMs`, `stepFrameMs`, `snapToBoundaryMs`, `formatTimecode`) live in `models/clip_x.dart`; every playhead move goes through `seekTimeline` (`playhead_controls.dart`). Snap is off by default and not persisted (`snapScrubProvider`). Only the timecode `Consumer` watches the playhead (F-71 is unchanged). Not run on a device/SDK. | Read `playhead_controls.dart`, `timeline_scrub_bar.dart`, `editor_screen.dart`; `test/playhead_tools_test.dart` (not run, no SDK; the frame-step arithmetic was simulated in Python) |
 
 ## 8. Assets and licences
 | ID | Fact | Evidence |
@@ -94,14 +96,15 @@ Legend: ✅ verified (how is stated) · ⚠️ NOT verified · 🐞 known bug ·
 | F-81 ⚠️ | **Licence/provenance of the 3 WAV loops is unknown**: the files carry no metadata tags and no licence file exists. You must confirm you created them or hold a licence that allows commercial redistribution. | Ran `ffprobe` (no tags) |
 | F-82 ✅ | DejaVu fonts ship with their licence file (Bitstream Vera licence + public-domain changes). | Read `assets/fonts/LICENSE-DejaVu.txt` |
 | F-83 ✅ | `ffmpeg_kit_flutter_new_full` is the LGPL-3.0 "Full" variant (no GPL libraries, no libx264). | pub.dev package page (search 2026-10-11) |
+| F-84 ✅ | P2 shipped 2026-10-12: `assets/dev/` (~60 KB — 2 synthetic h264 clips + 1 JPEG, generated with desktop `ffmpeg lavfi` sources, no licence question) backs a `kDebugMode`-gated "Load sample project" button in Home's app bar (`sample_project_service.dart`). These assets ship in **every** build, debug or release — pubspec assets aren't build-mode-conditional — so `assets/` is now ~3.36 MB, not 3.3 MB (F-80). Negligible for the Play 16 KB-page/size checks, but flagging per `docs/LAUNCH_CHECKLIST.md`'s APK-size note. | Read `pubspec.yaml`, `sample_project_service.dart`, `home_screen.dart`; `du -sh assets/dev` |
 
 ---
 
 ## 9. 🐞 Known bugs (read from code; not reproduced on a device)
 | ID | Bug | Where | Impact |
 |---|---|---|---|
-| B-01 🐞 | `splitClip` creates the second half **without copying `volume` and `filterPreset`** (it copies rotation, thumbnail, transition, brightness/contrast/saturation, muted). The second half returns to volume 1.0 and loses its preset label. | `project_database.dart` `splitClip` | Audio level jumps at the split point in export. Fix: copy both fields; add a test. |
-| B-02 🐞 | `splitClip` copies `transitionOut` to the new clip **and the original keeps its own**, so the first half now has a transition *into its own second half*. | same | A visible dip/dissolve at the cut point if the original had `fade`/`dissolve`. Likely wanted: first half = `cut`, second half inherits. Confirm intent, then fix + test. |
+| B-01 ✅ fixed 2026-10-12 | `splitClip` creates the second half **without copying `volume` and `filterPreset`** (it copies rotation, thumbnail, transition, brightness/contrast/saturation, muted). The second half returns to volume 1.0 and loses its preset label. | `project_database.dart` `splitClip` | Fixed: both fields are now copied to the second half. Covered by `test/split_clip_test.dart` (not run, no SDK). |
+| B-02 ✅ fixed 2026-10-12 | `splitClip` copies `transitionOut` to the new clip **and the original keeps its own**, so the first half now has a transition *into its own second half*. | same | Fixed: the first half is now forced to `cut` at the new boundary; the second half inherits the original's outgoing transition. Covered by `test/split_clip_test.dart` (not run, no SDK). |
 | B-03 🐞 | Release build is debug-signed (F-06). | `build.gradle.kts` | Play Console rejects it / cannot be updated later with a proper key. |
 | B-04 🐞 | Microphone + media permissions are requested at launch although unused / picker-based (F-21, F-22). | `permission_service.dart`, manifest | Play review risk, and a poor first-run experience. |
 

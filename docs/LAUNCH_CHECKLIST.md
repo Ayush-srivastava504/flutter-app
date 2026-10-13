@@ -139,7 +139,7 @@ flutter build apk --release --target-platform android-arm64 && adb install -r bu
 - [ ] Backup of the keystore + passwords stored outside the repo
 
 ## 7. After launch
-Watch Console → **Android vitals** (crash and ANR rates; the Console shows its current "bad behaviour" thresholds), read reviews, keep `FACTS.md` updated, and plan the next release: P-1 (editor rebuilds), P1 (media copy to documents dir), F1 (delete/rename projects — users will ask), F22 (foreground service for long exports).
+Watch Console → **Android vitals** (crash and ANR rates; the Console shows its current "bad behaviour" thresholds), read reviews, keep `FACTS.md` updated, and plan the next release: P-1 (editor rebuilds), P1 (media copy to documents dir), F1 (delete/rename/duplicate projects — shipped 2026-10-11, not yet device-tested), F22 (foreground service for long exports).
 
 ## Sources checked 2026-10-11
 - Play Help — Target API level requirements (Android 16 / API 36 for new apps and updates from 2026-08-31).

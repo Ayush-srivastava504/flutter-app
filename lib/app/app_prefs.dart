@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Tiny key/value store (one JSON file in app documents) for the two things
-/// Phase 9 needs to remember across launches. Avoids a new dependency.
+/// Tiny key/value store (one JSON file in app documents) for the few things
+/// the app remembers across launches (onboarding, last project, export choices). Avoids a new dependency.
 class AppPrefs {
   final Future<Directory> Function() _dir;
   Map<String, dynamic>? _cache;
@@ -35,6 +35,23 @@ class AppPrefs {
 
   Future<void> setOnboardingDone() async {
     (await _load())['onboardingDone'] = true;
+    await _save();
+  }
+
+  /// Last export choices, so the Export screen opens on what the user used
+  /// last time (F5). Stored as plain values (quality enum name, fps int) —
+  /// `ExportQuality.tryParse` / `sanitizeExportFps` validate them on read.
+  Future<String?> get exportQualityName async => (await _load())['exportQuality'] as String?;
+
+  Future<int?> get exportFps async {
+    final v = (await _load())['exportFps'];
+    return v is int ? v : null;
+  }
+
+  Future<void> setExportSettings({required String qualityName, required int fps}) async {
+    final m = await _load();
+    m['exportQuality'] = qualityName;
+    m['exportFps'] = fps;
     await _save();
   }
 

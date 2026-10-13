@@ -27,3 +27,7 @@ final playheadMsProvider = StateProvider<int>((ref) => 0);
 /// duration. Adjustable by pinch on the clip strip; clamped in the strip
 /// widget so clips never collapse to nothing or sprawl off-screen.
 final timelineZoomProvider = StateProvider<double>((ref) => 40.0);
+
+/// F4: when on, scrubbing the timeline bar snaps the playhead to a clip edge
+/// that is within a few pixels. Off by default; not persisted.
+final snapScrubProvider = StateProvider<bool>((ref) => false);
