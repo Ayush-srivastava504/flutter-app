@@ -60,6 +60,29 @@ void main() {
       final result = await storage.persistToDocuments(missing);
       expect(result, missing);
     });
+
+    test('consumeCacheSource moves a picker scratch file and removes its empty folder', () async {
+      final scratch = Directory(p.join(cacheDir.path, 'b6609b66'))..createSync();
+      final source = File(p.join(scratch.path, 'VID_1.mp4'))..writeAsBytesSync([4, 5, 6]);
+
+      final newPath = await storage.persistToDocuments(source.path, consumeCacheSource: true);
+
+      expect(p.dirname(newPath), p.join(documentsDir.path, 'imported_media'));
+      expect(await File(newPath).readAsBytes(), [4, 5, 6]);
+      expect(await source.exists(), isFalse);
+      expect(await scratch.exists(), isFalse);
+      expect(await cacheDir.exists(), isTrue, reason: 'never deletes the cache root');
+    });
+
+    test('consumeCacheSource never touches a file outside the cache', () async {
+      final outside = Directory(p.join(tempRoot.path, 'gallery'))..createSync();
+      final source = File(p.join(outside.path, 'keep.mp4'))..writeAsBytesSync([7]);
+
+      final newPath = await storage.persistToDocuments(source.path, consumeCacheSource: true);
+
+      expect(await File(newPath).readAsBytes(), [7]);
+      expect(await source.exists(), isTrue);
+    });
   });
 
   group('isInCache', () {

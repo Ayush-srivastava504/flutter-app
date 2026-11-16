@@ -9,7 +9,9 @@ class PermissionService {
       Permission.photos, // iOS gallery / Android 13+ media
       Permission.videos,
       Permission.storage, // Android <13 fallback
-      Permission.microphone, // needed if we later support audio recording
+      // No microphone: nothing records audio yet (voice-over is F20). Asking
+      // for it at launch with no feature behind it is a Play review risk
+      // (docs/FACTS.md B-04); request it from the recording UI when built.
     ].request();
 
     // Consider granted if at least photo/video access succeeded —

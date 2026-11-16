@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'package:video_player/video_player.dart';
 
 import '../models/media_asset.dart';
+import '../models/media_kind.dart';
 import 'media_metadata_service.dart';
 import 'media_storage_service.dart';
 import 'thumbnail_service.dart';
@@ -38,7 +39,7 @@ class MediaImportService {
   Future<MediaAsset?> pickVideo() async {
     final XFile? file = await _picker.pickVideo(source: ImageSource.gallery);
     if (file == null) return null;
-    final persistedPath = await _storageService.persistToDocuments(file.path);
+    final persistedPath = await _storageService.persistToDocuments(file.path, consumeCacheSource: true);
     return _buildVideoAsset(persistedPath);
   }
 
@@ -47,8 +48,25 @@ class MediaImportService {
   Future<MediaAsset?> pickPhoto() async {
     final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
     if (file == null) return null;
-    final persistedPath = await _storageService.persistToDocuments(file.path);
+    final persistedPath = await _storageService.persistToDocuments(file.path, consumeCacheSource: true);
     return _buildPhotoAsset(persistedPath);
+  }
+
+  /// A file the app already owns (e.g. an AI-generated image or video in
+  /// the documents dir) as a timeline-ready asset.
+  Future<MediaAsset> assetFromFile(String path) =>
+      isPhotoPath(path) ? _buildPhotoAsset(path) : _buildVideoAsset(path);
+
+  /// Templates: pick several videos and photos at once, in the order the
+  /// user tapped them. Empty if the picker is cancelled.
+  Future<List<MediaAsset>> pickMultipleMedia({int? limit}) async {
+    final files = await _picker.pickMultipleMedia(limit: limit != null && limit >= 2 ? limit : null);
+    final out = <MediaAsset>[];
+    for (final f in files) {
+      final path = await _storageService.persistToDocuments(f.path, consumeCacheSource: true);
+      out.add(isPhotoPath(path) ? await _buildPhotoAsset(path) : await _buildVideoAsset(path));
+    }
+    return out;
   }
 
   Future<MediaAsset> _buildVideoAsset(String path) async {

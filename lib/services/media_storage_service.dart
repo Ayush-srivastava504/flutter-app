@@ -46,7 +46,13 @@ class MediaStorageService {
   /// denied) returns [sourcePath] unchanged rather than throwing — a
   /// failed copy should never block an otherwise-successful import; the
   /// clip just keeps pointing at the cache path, same as before P1.
-  Future<String> persistToDocuments(String sourcePath) async {
+  ///
+  /// [consumeCacheSource]: the source is a picker's fresh scratch copy that
+  /// nothing else references — when it sits in the cache dir, delete it
+  /// after copying so every import isn't stored twice. Found on a phone 2026-11-13: ~880 MB of picker copies
+  /// left in the cache. Never set this for paths the database may already
+  /// hold (repair pass): duplicated clips share one source file.
+  Future<String> persistToDocuments(String sourcePath, {bool consumeCacheSource = false}) async {
     try {
       final dir = await _documentsDir();
       final destDir = Directory(p.join(dir.path, 'imported_media'));
@@ -55,11 +61,39 @@ class MediaStorageService {
       }
       final ext = p.extension(sourcePath);
       final destPath = p.join(destDir.path, '${_uuid.v4()}$ext');
-      await File(sourcePath).copy(destPath);
+      if (consumeCacheSource && await isInCache(sourcePath)) {
+        await _moveOutOfCache(File(sourcePath), destPath);
+      } else {
+        await File(sourcePath).copy(destPath);
+      }
       return destPath;
     } catch (_) {
       return sourcePath;
     }
+  }
+
+  Future<void> _moveOutOfCache(File source, String destPath) async {
+    // Copy + delete, not rename: on Android a renamed file keeps the cache
+    // dir's `<app>_cache` group, so Settings would keep counting the
+    // imported media as clearable "Cache" (checked on a phone 2026-11-13).
+    await source.copy(destPath);
+    try {
+      await source.delete();
+    } catch (_) {}
+    // Pickers put each file in its own scratch folder; remove it if empty
+    // (but never a cache root itself).
+    final parent = source.parent;
+    try {
+      final roots = <String>[];
+      for (final dirFn in _cacheDirs) {
+        try {
+          roots.add(p.normalize((await dirFn()).path));
+        } catch (_) {}
+      }
+      if (!roots.contains(p.normalize(parent.path)) && await parent.list().isEmpty) {
+        await parent.delete();
+      }
+    } catch (_) {}
   }
 
   /// True if [path] sits inside one of [_cacheDirs] — i.e. it's a
