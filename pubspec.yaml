@@ -53,9 +53,16 @@ dependencies:
   uuid: ^4.4.0
 
   cupertino_icons: ^1.0.6
+  http: ^1.6.0
+  flutter_secure_storage: ^10.3.4
+  firebase_core: ^4.0.0
+  firebase_analytics: ^12.0.0
+  firebase_crashlytics: ^5.0.0
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   drift_dev: ^2.16.0
   build_runner: ^2.4.9
@@ -66,8 +73,14 @@ flutter:
   assets:
     - assets/images/
     - assets/audio/
+    - assets/audio/library/
+    - assets/audio/sfx/
     - assets/fonts/
     - assets/dev/
+  shaders:
+    - shaders/look.frag
+    - shaders/adjust.frag
+    - shaders/key.frag
 
 dependency_overrides:
   video_thumbnail:
