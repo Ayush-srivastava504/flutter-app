@@ -38,6 +38,17 @@ class AppPrefs {
     await _save();
   }
 
+  /// Editor modes whose quick guide has been shown (by `EditMode.name`).
+  Future<bool> hasSeenModeTips(String mode) async =>
+      ((await _load())['seenModeTips'] as List?)?.contains(mode) ?? false;
+
+  Future<void> markModeTipsSeen(String mode) async {
+    final m = await _load();
+    final seen = {...((m['seenModeTips'] as List?) ?? const []).whereType<String>(), mode};
+    m['seenModeTips'] = seen.toList();
+    await _save();
+  }
+
   /// Last export choices, so the Export screen opens on what the user used
   /// last time (F5). Stored as plain values (quality enum name, fps int) —
   /// `ExportQuality.tryParse` / `sanitizeExportFps` validate them on read.
@@ -52,6 +63,16 @@ class AppPrefs {
     final m = await _load();
     m['exportQuality'] = qualityName;
     m['exportFps'] = fps;
+    await _save();
+  }
+
+  /// Anonymous usage stats + crash reports (Firebase, when configured).
+  /// On by default; Settings → Privacy turns it off.
+  Future<bool> get analyticsEnabled async => (await _load())['analyticsEnabled'] as bool? ?? true;
+
+  Future<void> setAnalyticsEnabled(bool on) async {
+    final m = await _load();
+    m['analyticsEnabled'] = on;
     await _save();
   }
 
