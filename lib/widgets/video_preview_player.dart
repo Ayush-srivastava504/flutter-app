@@ -1,14 +1,19 @@
 import 'dart:async' show unawaited;
 import 'dart:io';
-import 'dart:ui' show ColorFilter;
+import 'dart:ui' as ui show Clip, ImageFilter;
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:video_player/video_player.dart';
 
 import '../data/project_database.dart';
-import '../models/color_filter_x.dart';
+import '../models/fit_mode_x.dart';
 import '../models/media_asset.dart';
+import '../models/look_x.dart' show ScaledLook;
+import '../models/chroma_key.dart';
+import 'chroma_keyed.dart';
+import 'look_filtered.dart';
 
 /// Full-screen-ish preview of a single [MediaAsset].
 ///
@@ -68,6 +73,33 @@ class VideoPreviewPlayer extends StatefulWidget {
   final double contrast;
   final double saturation;
 
+  /// F7: which named look (see `models/look_x.dart`) is layered on top
+  /// of [brightness]/[contrast]/[saturation], or null for none.
+  final String? look;
+
+  /// How strongly [look] is applied, 0..1.
+  final double lookStrength;
+
+  /// Before/after divider position (0..1), or null when not comparing.
+  final double? compareSplit;
+
+  /// F10: quarter-turns clockwise (0–3) plus horizontal/vertical flip,
+  /// applied on top of whatever `video_player` already auto-rotates
+  /// from the file's own container metadata — this is a separate,
+  /// deliberate user edit, not a second application of that metadata.
+  final int turns;
+  final bool flipH;
+  final bool flipV;
+
+  /// F11: constant playback speed, 1.0 = unchanged. No-op for photos
+  /// (nothing to speed up) — see `Clips.speed`'s doc comment for why
+  /// this is scoped to 0.5–2.0.
+  final double speed;
+
+  /// F15: 'fit' | 'fill' | 'blur' (`models/fit_mode_x.dart`). `blur`
+  /// previews as `fit`; only the export renders the blurred background.
+  final String fitMode;
+
   /// This clip's own audio level (0.0–1.0), applied whenever [muted] is
   /// false.
   final double clipVolume;
@@ -78,6 +110,19 @@ class VideoPreviewPlayer extends StatefulWidget {
 
   /// The project's background-music track, or null if none is attached.
   final AudioTrack? audioTrack;
+
+  /// v11: voice-overs on the timeline, played in sync like [audioTrack].
+  /// The preview plays them as recorded; "enhance" is heard in the export.
+  final List<VoiceOver> voiceOvers;
+
+  /// v11: a stylise effect (`effectStyle`), drawn after the look — same
+  /// order as the export. Motion effects are applied by the editor around
+  /// this widget.
+  final ScaledLook? effectStyle;
+
+  /// v12: background removal, drawn on the framed clip before the look —
+  /// same order as the export.
+  final ChromaKeySpec? chromaKey;
 
   /// Where this clip sits on the overall (trimmed) video timeline, in
   /// ms — i.e. `TimelinePosition.startMs` for this clip. Needed to map
@@ -104,12 +149,23 @@ class VideoPreviewPlayer extends StatefulWidget {
     this.clipVolume = 1.0,
     this.muted = false,
     this.audioTrack,
+    this.voiceOvers = const [],
+    this.effectStyle,
+    this.chromaKey,
     this.timelineStartMs = 0,
     this.onPositionTick,
     this.onAspectRatioKnown,
     this.brightness = 0,
     this.contrast = 0,
     this.saturation = 0,
+    this.look,
+    this.lookStrength = 1.0,
+    this.compareSplit,
+    this.turns = 0,
+    this.flipH = false,
+    this.flipV = false,
+    this.speed = 1.0,
+    this.fitMode = fitModeFit,
   });
 
   @override
@@ -119,6 +175,7 @@ class VideoPreviewPlayer extends StatefulWidget {
 class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
   VideoPlayerController? _controller;
   AudioPlayer? _musicPlayer;
+  final Map<String, AudioPlayer> _voicePlayers = {};
   bool _isReady = false;
   bool _hasError = false;
 
@@ -127,6 +184,14 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
   /// it. `video_player`'s position listener doesn't fire every frame, so
   /// some slack avoids constantly re-seeking on tiny, harmless gaps.
   static const int _syncToleranceMs = 180;
+
+  /// Source-file offset from the trim start -> offset on the timeline.
+  /// At 2x a clip covers its source twice as fast, so 1000 ms of source is
+  /// 500 ms of timeline (F11). Must match `ClipTiming.sourceToTimelineOffsetMs`.
+  int _toTimelineMs(int sourceOffsetMs) {
+    final s = widget.speed <= 0 ? 1.0 : widget.speed;
+    return s == 1.0 ? sourceOffsetMs : (sourceOffsetMs / s).round();
+  }
 
   double get _effectiveClipVolume =>
       widget.muted ? 0.0 : widget.clipVolume.clamp(0.0, 1.0);
@@ -147,8 +212,16 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
       _isReady = false;
       _hasError = false;
       _disposeMusic();
+      _disposeVoices();
       _setUp();
       return;
+    }
+
+    String files(List<VoiceOver> l) => l.map((v) => '${v.id}|${v.sourceUri}').join(',');
+    if (files(old.voiceOvers) != files(widget.voiceOvers)) {
+      _setUpVoices();
+    } else if (!listEquals(old.voiceOvers, widget.voiceOvers) || old.timelineStartMs != widget.timelineStartMs) {
+      _syncVoices(force: true);
     }
 
     if (old.trimStartMs != widget.trimStartMs ||
@@ -160,6 +233,10 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
 
     if (old.muted != widget.muted || old.clipVolume != widget.clipVolume) {
       _controller?.setVolume(_effectiveClipVolume);
+    }
+
+    if (old.speed != widget.speed) {
+      _controller?.setPlaybackSpeed(widget.speed);
     }
 
     final oldTrack = old.audioTrack;
@@ -194,11 +271,13 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
         await controller.seekTo(Duration(milliseconds: widget.trimStartMs!));
       }
       await controller.setVolume(_effectiveClipVolume);
+      await controller.setPlaybackSpeed(widget.speed);
       controller.addListener(_onControllerTick);
       if (!mounted) return;
       setState(() => _isReady = true);
       widget.onAspectRatioKnown?.call(controller.value.aspectRatio);
       unawaited(_setUpMusic());
+      unawaited(_setUpVoices());
     } catch (_) {
       if (!mounted) return;
       setState(() => _hasError = true);
@@ -236,9 +315,64 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
     _musicPlayer = null;
   }
 
+  Future<void> _setUpVoices() async {
+    _disposeVoices();
+    for (final v in widget.voiceOvers) {
+      final player = AudioPlayer();
+      try {
+        await player.setFilePath(v.sourceUri);
+        if (!mounted) {
+          await player.dispose();
+          return;
+        }
+        _voicePlayers[v.id] = player;
+      } catch (_) {
+        await player.dispose(); // a missing file just stays silent here
+      }
+    }
+    _syncVoices(force: true);
+  }
+
+  void _disposeVoices() {
+    for (final p in _voicePlayers.values) {
+      p.dispose();
+    }
+    _voicePlayers.clear();
+  }
+
+  /// Same timeline mapping as [_syncMusic], once per voice-over.
+  void _syncVoices({bool force = false}) {
+    final controller = _controller;
+    if (_voicePlayers.isEmpty || controller == null) return;
+    final value = controller.value;
+    if (!value.isInitialized) return;
+    final trimStartMs = widget.trimStartMs ?? 0;
+    final sourceOffsetMs = value.position.inMilliseconds - trimStartMs;
+    final timelineMs = widget.timelineStartMs + _toTimelineMs(sourceOffsetMs < 0 ? 0 : sourceOffsetMs);
+    for (final v in widget.voiceOvers) {
+      final player = _voicePlayers[v.id];
+      if (player == null) continue;
+      final local = timelineMs - v.startMs;
+      if (local < 0 || local >= v.durationMs) {
+        if (player.playing) player.pause();
+        continue;
+      }
+      if (force || (local - player.position.inMilliseconds).abs() > _syncToleranceMs) {
+        player.seek(Duration(milliseconds: local));
+      }
+      player.setVolume(v.volume.clamp(0.0, 1.0));
+      if (value.isPlaying && !player.playing) {
+        player.play();
+      } else if (!value.isPlaying && player.playing) {
+        player.pause();
+      }
+    }
+  }
+
   void _onControllerTick() {
     _enforceTrimBounds();
     _syncMusic();
+    _syncVoices();
     _reportPosition();
   }
 
@@ -263,12 +397,13 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
     if (!value.isInitialized) return;
 
     final trimStartMs = widget.trimStartMs ?? 0;
-    var withinClipMs = value.position.inMilliseconds - trimStartMs;
-    if (withinClipMs < 0) withinClipMs = 0;
+    var sourceOffsetMs = value.position.inMilliseconds - trimStartMs;
+    if (sourceOffsetMs < 0) sourceOffsetMs = 0;
+    var withinClipMs = _toTimelineMs(sourceOffsetMs);
 
     final trimEndMs = widget.trimEndMs;
     if (trimEndMs != null) {
-      final trimmedMs = trimEndMs - trimStartMs;
+      final trimmedMs = _toTimelineMs(trimEndMs - trimStartMs);
       if (trimmedMs > 0 && withinClipMs >= trimmedMs) {
         withinClipMs = trimmedMs - 1;
       }
@@ -314,9 +449,9 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
     if (!value.isInitialized) return;
 
     final trimStartMs = widget.trimStartMs ?? 0;
-    final withinClipMs = value.position.inMilliseconds - trimStartMs;
-    final timelineMs =
-        widget.timelineStartMs + (withinClipMs < 0 ? 0 : withinClipMs);
+    final sourceOffsetMs = value.position.inMilliseconds - trimStartMs;
+    final timelineMs = widget.timelineStartMs +
+        _toTimelineMs(sourceOffsetMs < 0 ? 0 : sourceOffsetMs);
 
     final musicTrimmedMs = track.trimEndMs - track.trimStartMs;
     final activeStartMs = track.offsetMs;
@@ -335,6 +470,14 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
       player.seek(Duration(milliseconds: targetMs));
     }
 
+    // F9: approximate the export's `afade` with a live linear ramp —
+    // see `_musicFadeMultiplier`'s doc comment for why this is only an
+    // approximation, not a frame-accurate match to the export.
+    player.setVolume(
+      (track.volume.clamp(0.0, 1.0) * _musicFadeMultiplier(track, targetMs))
+          .clamp(0.0, 1.0),
+    );
+
     if (value.isPlaying && !player.playing) {
       player.play();
     } else if (!value.isPlaying && player.playing) {
@@ -342,11 +485,35 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
     }
   }
 
+  /// F9 preview approximation of the music's fade-in/out: a linear ramp
+  /// over [AudioTrack.fadeInMs]/[AudioTrack.fadeOutMs], measured from
+  /// the *trimmed window's own* start/end — the same axis [positionMs]
+  /// (the music file's own position, from [_syncMusic]'s `targetMs`) is
+  /// already in, not the timeline. Export instead uses FFmpeg's `afade`,
+  /// which is frame-accurate; this is a plain linear ramp recomputed
+  /// every controller tick, close enough for a live preview but not
+  /// meant to match the export exactly (same preview/export split as
+  /// `AudioTrackPanel`'s doc comment already notes for trim/offset/volume).
+  double _musicFadeMultiplier(AudioTrack track, int positionMs) {
+    var mult = 1.0;
+    final sinceStart = positionMs - track.trimStartMs;
+    if (track.fadeInMs > 0 && sinceStart < track.fadeInMs) {
+      mult = (sinceStart / track.fadeInMs).clamp(0.0, 1.0);
+    }
+    final untilEnd = track.trimEndMs - positionMs;
+    if (track.fadeOutMs > 0 && untilEnd < track.fadeOutMs) {
+      final outMult = (untilEnd / track.fadeOutMs).clamp(0.0, 1.0);
+      if (outMult < mult) mult = outMult;
+    }
+    return mult;
+  }
+
   @override
   void dispose() {
     _controller?.removeListener(_onControllerTick);
     _controller?.dispose();
     _disposeMusic();
+    _disposeVoices();
     super.dispose();
   }
 
@@ -363,17 +530,27 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return _FilterPreview(
+    final style = widget.effectStyle;
+    final looked = LookFiltered(
       brightness: widget.brightness,
       contrast: widget.contrast,
       saturation: widget.saturation,
-      child: _buildContent(context),
+      look: widget.look,
+      strength: widget.lookStrength,
+      compareSplit: widget.compareSplit,
+      child: ChromaKeyed(spec: widget.chromaKey, child: _buildContent(context)),
     );
+    return LookFiltered(spec: style?.spec, strength: style?.strength ?? 0, child: looked);
   }
 
   Widget _buildContent(BuildContext context) {
     if (!widget.asset.isVideo) {
-      return _PhotoPreview(asset: widget.asset);
+      return _RotateFlip(
+        turns: widget.turns,
+        flipH: widget.flipH,
+        flipV: widget.flipV,
+        child: _PhotoPreview(asset: widget.asset, fitMode: widget.fitMode),
+      );
     }
 
     if (_hasError) {
@@ -384,7 +561,7 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
     }
 
     if (!_isReady || _controller == null) {
-      return _LoadingPreview(thumbnailUri: widget.asset.thumbnailUri);
+      return _LoadingPreview(thumbnailUri: widget.asset.thumbnailUri, fitMode: widget.fitMode);
     }
 
     final controller = _controller!;
@@ -393,10 +570,26 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          Center(
-            child: AspectRatio(
-              aspectRatio: controller.value.aspectRatio,
-              child: VideoPlayer(controller),
+          Positioned.fill(
+            child: _RotateFlip(
+              turns: widget.turns,
+              flipH: widget.flipH,
+              flipV: widget.flipV,
+              // Scales the video's natural size to the canvas exactly like
+              // the export: fit letterboxes, fill crops, blur fits over a
+              // blurred cover copy (one decoder — the texture is drawn twice).
+              child: FitFrame(
+                fitMode: widget.fitMode,
+                builder: (fit) => FittedBox(
+                  fit: fit,
+                  clipBehavior: ui.Clip.hardEdge,
+                  child: SizedBox(
+                    width: controller.value.size.width,
+                    height: controller.value.size.height,
+                    child: VideoPlayer(controller),
+                  ),
+                ),
+              ),
             ),
           ),
           _PlayPauseGlyph(controller: controller),
@@ -421,41 +614,44 @@ class _VideoPreviewPlayerState extends State<VideoPreviewPlayer> {
   }
 }
 
-/// Wraps [child] in a live `ColorFiltered` built from
-/// `models/color_filter_x.dart`'s matrix math, or returns [child]
-/// unchanged when every value is at its neutral default — the common
-/// case (most clips are never touched in `FilterPanel`), so unedited
-/// clips don't pay for a no-op filter on every frame.
-class _FilterPreview extends StatelessWidget {
-  final double brightness;
-  final double contrast;
-  final double saturation;
+/// F10: wraps [child] in [turns] quarter-turns clockwise (via
+/// `RotatedBox`, which — unlike `Transform.rotate` — swaps the layout's
+/// width/height for odd turn counts, so a landscape clip rotated 90°
+/// actually lays out portrait-shaped instead of just painting sideways
+/// inside its original landscape box) plus an optional horizontal/
+/// vertical mirror, applied *before* the rotation (flip the unrotated
+/// frame, then rotate the result) — the same order
+/// `export_command_builder.dart`'s filter chain applies them in, so the
+/// preview matches what export produces.
+class _RotateFlip extends StatelessWidget {
+  final int turns;
+  final bool flipH;
+  final bool flipV;
   final Widget child;
 
-  const _FilterPreview({
-    required this.brightness,
-    required this.contrast,
-    required this.saturation,
+  const _RotateFlip({
+    required this.turns,
+    required this.flipH,
+    required this.flipV,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isNeutralFilter(
-      brightness: brightness,
-      contrast: contrast,
-      saturation: saturation,
-    )) {
-      return child;
+    var content = child;
+    if (flipH || flipV) {
+      content = Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..scale(flipH ? -1.0 : 1.0, flipV ? -1.0 : 1.0),
+        child: content,
+      );
     }
-    return ColorFiltered(
-      colorFilter: ColorFilter.matrix(buildColorMatrix(
-        brightness: brightness,
-        contrast: contrast,
-        saturation: saturation,
-      )),
-      child: child,
-    );
+    final normalizedTurns = turns % 4;
+    if (normalizedTurns != 0) {
+      content = RotatedBox(quarterTurns: normalizedTurns, child: content);
+    }
+    return content;
   }
 }
 
@@ -491,8 +687,9 @@ class _PlayPauseGlyph extends StatelessWidget {
 /// slower-to-decode clips, where initialize() can take a moment.
 class _LoadingPreview extends StatelessWidget {
   final String? thumbnailUri;
+  final String fitMode;
 
-  const _LoadingPreview({required this.thumbnailUri});
+  const _LoadingPreview({required this.thumbnailUri, required this.fitMode});
 
   @override
   Widget build(BuildContext context) {
@@ -507,13 +704,19 @@ class _LoadingPreview extends StatelessWidget {
       alignment: Alignment.center,
       fit: StackFit.expand,
       children: [
-        Image.file(
-          File(thumbnailUri),
-          fit: BoxFit.contain,
-          cacheWidth: 720,
-          // If the cached thumbnail file has gone missing, fall back
-          // silently to the plain black backdrop underneath.
-          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        // Same framing as the player that replaces it, so nothing jumps.
+        FitFrame(
+          fitMode: fitMode,
+          builder: (fit) => Image.file(
+            File(thumbnailUri),
+            fit: fit,
+            width: double.infinity,
+            height: double.infinity,
+            cacheWidth: 720,
+            // If the cached thumbnail file has gone missing, fall back
+            // silently to the plain black backdrop underneath.
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
         ),
         Container(color: Colors.black38),
         const CircularProgressIndicator(strokeWidth: 2),
@@ -524,20 +727,65 @@ class _LoadingPreview extends StatelessWidget {
 
 class _PhotoPreview extends StatelessWidget {
   final MediaAsset asset;
+  final String fitMode;
 
-  const _PhotoPreview({required this.asset});
+  const _PhotoPreview({required this.asset, required this.fitMode});
 
   @override
   Widget build(BuildContext context) {
-    return Image.file(
-      File(asset.uri),
-      fit: BoxFit.contain,
-      cacheWidth: 1440, // a 12MP photo would otherwise decode to ~48MB for a 3s clip
-      errorBuilder: (_, __, ___) => const _PreviewMessage(
-        icon: Icons.error_outline,
-        text: 'Couldn\'t load this photo.',
+    return FitFrame(
+      fitMode: fitMode,
+      // Both copies share one decode (same file + cacheWidth = same cache key).
+      builder: (fit) => Image.file(
+        File(asset.uri),
+        fit: fit,
+        width: double.infinity,
+        height: double.infinity,
+        cacheWidth: 1440, // a 12MP photo would otherwise decode to ~48MB for a 3s clip
+        errorBuilder: (_, __, ___) => const _PreviewMessage(
+          icon: Icons.error_outline,
+          text: 'Couldn\'t load this photo.',
+        ),
       ),
     );
+  }
+}
+
+/// F15 in the preview, matching `export_command_builder.dart`:
+///  * fit  → whole picture, letterboxed (`contain`);
+///  * fill → covers the frame, cropped (`cover`);
+///  * blur → whole picture over a blurred, cropped copy of itself.
+/// [builder] is called once per layer with the [BoxFit] to use; it must
+/// scale its content to the incoming constraints with that fit.
+class FitFrame extends StatelessWidget {
+  final String fitMode;
+  final Widget Function(BoxFit fit) builder;
+
+  const FitFrame({super.key, required this.fitMode, required this.builder});
+
+  /// Blur radius as a fraction of the frame width. The export blurs a
+  /// quarter-size copy with `gblur=sigma=6` (≈ 24 px at full size), i.e.
+  /// 2–3 % of the width depending on resolution.
+  static const blurFraction = 0.033;
+
+  @override
+  Widget build(BuildContext context) {
+    final mode = normalizeFitMode(fitMode);
+    if (mode == fitModeFill) return ClipRect(child: builder(BoxFit.cover));
+    if (mode != fitModeBlur) return builder(BoxFit.contain);
+    return LayoutBuilder(builder: (context, box) {
+      final width = box.maxWidth.isFinite ? box.maxWidth : 360.0;
+      final sigma = width * blurFraction;
+      return Stack(fit: StackFit.expand, children: [
+        ClipRect(
+          child: ImageFiltered(
+            imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma, tileMode: TileMode.clamp),
+            child: builder(BoxFit.cover),
+          ),
+        ),
+        builder(BoxFit.contain),
+      ]);
+    });
   }
 }
 

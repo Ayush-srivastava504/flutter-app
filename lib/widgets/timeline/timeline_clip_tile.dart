@@ -3,6 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
+
 import '../../data/project_database.dart';
 import '../../models/clip_x.dart';
 
@@ -41,8 +43,7 @@ class TimelineClipTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = (clip.trimmedDurationMs / 1000 * pixelsPerSecond)
-        .clamp(_minWidth, 4000.0);
+    final width = (clip.trimmedDurationMs / 1000 * pixelsPerSecond).clamp(_minWidth, 4000.0);
 
     return GestureDetector(
       onTap: onTap,
@@ -52,9 +53,7 @@ class TimelineClipTile extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 1),
         decoration: BoxDecoration(
           border: Border.all(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Colors.transparent,
+            color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
             width: 2,
           ),
           borderRadius: BorderRadius.circular(4),
@@ -101,39 +100,67 @@ class _TransitionBadge extends StatelessWidget {
 
   const _TransitionBadge({required this.transitionOut, required this.onTap});
 
-  IconData get _icon {
-    switch (transitionOut) {
-      case 'fade':
-        return Icons.gradient;
-      case 'dissolve':
-        return Icons.blur_on;
-      default:
-        return Icons.content_cut;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isCut = transitionOut == 'cut';
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: isCut ? Colors.black45 : Theme.of(context).colorScheme.secondary,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          _icon,
-          size: 12,
-          color: isCut ? Colors.white38 : Colors.black87,
+    final isCut = transitionIcon(transitionOut) == Icons.content_cut;
+    return Tooltip(
+      message: 'Transition',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        // A little padding makes the 20 px badge easier to hit with a thumb.
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: isCut ? Colors.black45 : Theme.of(context).colorScheme.secondary,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              transitionIcon(transitionOut),
+              size: 12,
+              color: isCut ? Colors.white38 : Colors.black87,
+            ),
+          ),
         ),
       ),
     );
   }
 }
+
+/// Icon for a `Clips.transitionOut` value (`transitionOptions` in
+/// `models/transition_x.dart`). Lives here, not in the model, because the
+/// model file is pure Dart with no Flutter import.
+IconData transitionIcon(String transitionOut) => switch (transitionOut) {
+      'fade' => Icons.gradient,
+      'dissolve' => Icons.blur_on,
+      'flash' => Icons.flash_on,
+      'dipblack' => Icons.brightness_3_outlined,
+      'mono' => Icons.filter_b_and_w,
+      'whip' => Icons.fast_forward_rounded,
+      'whipup' => Icons.keyboard_double_arrow_up,
+      'slideleft' => Icons.swipe_left_alt,
+      'slideup' => Icons.swipe_up_alt,
+      'zoomin' => Icons.zoom_in,
+      'cover' => Icons.input,
+      'reveal' => Icons.output,
+      'squeeze' => Icons.compress,
+      'warp' => Icons.waves,
+      'wipeleft' => Icons.vertical_split,
+      'diagonal' => Icons.call_made,
+      'circleopen' => Icons.radio_button_unchecked,
+      'iris' => Icons.camera_outlined,
+      'box' => Icons.crop_square,
+      'doors' => Icons.door_sliding_outlined,
+      'slices' => Icons.view_stream_outlined,
+      'wind' => Icons.air,
+      'blur' => Icons.blur_linear,
+      'glitch' => Icons.grid_view,
+      'spin' => Icons.cyclone,
+      _ => Icons.content_cut,
+    };
 
 class _Thumbnail extends StatelessWidget {
   final Clip clip;
@@ -141,10 +168,12 @@ class _Thumbnail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uri = clip.thumbnailUri;
+    // Photos have no generated thumbnail — the photo itself is the picture
+    // (same rule as the filter/effects/background panels).
+    final uri = clip.thumbnailUri ?? (clip.isPhoto ? clip.sourceUri : null);
     if (uri == null) {
       return Container(
-        color: Colors.grey[800],
+        color: AppColors.surfaceTop,
         alignment: Alignment.center,
         child: const Icon(Icons.movie, color: Colors.white38, size: 18),
       );
@@ -155,7 +184,7 @@ class _Thumbnail extends StatelessWidget {
       cacheWidth: 240, // decode a small bitmap, not the full-size source (memory)
       gaplessPlayback: true,
       errorBuilder: (_, __, ___) => Container(
-        color: Colors.grey[800],
+        color: AppColors.surfaceTop,
         alignment: Alignment.center,
         child: const Icon(Icons.broken_image, color: Colors.white38, size: 18),
       ),

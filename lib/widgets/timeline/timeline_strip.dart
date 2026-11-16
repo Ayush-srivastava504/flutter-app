@@ -1,8 +1,13 @@
+import 'dart:ui' as ui show Clip;
+
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database_provider.dart';
 import '../../data/project_database.dart';
+import '../../models/transition_x.dart';
 import '../../providers/audio_providers.dart';
 import '../../providers/text_overlay_providers.dart';
 import '../../providers/timeline_providers.dart';
@@ -15,10 +20,15 @@ class TimelineStrip extends ConsumerWidget {
   final String projectId;
   final List<Clip> clips;
 
+  /// "+" at the end of the strip: add more clips (always visible, so adding
+  /// never depends on which panel is open).
+  final VoidCallback? onAdd;
+
   const TimelineStrip({
     super.key,
     required this.projectId,
     required this.clips,
+    this.onAdd,
   });
 
   static const double _minZoom = 10;
@@ -30,11 +40,14 @@ class TimelineStrip extends ConsumerWidget {
     final selectedId = ref.watch(selectedClipIdProvider);
 
     if (clips.isEmpty) {
-      return const Center(
-        child: Text(
-          'Import a clip to start your timeline',
-          style: TextStyle(color: Colors.white54),
-        ),
+      return Center(
+        child: onAdd == null
+            ? const Text('Import a clip to start your timeline', style: TextStyle(color: AppColors.textDim))
+            : TextButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_circle_outline),
+                label: const Text('Add videos or photos'),
+              ),
       );
     }
 
@@ -53,6 +66,7 @@ class TimelineStrip extends ConsumerWidget {
         scrollDirection: Axis.horizontal,
         buildDefaultDragHandles: false,
         itemCount: clips.length,
+        footer: onAdd == null ? null : _AddTile(onTap: onAdd!),
         onReorder: (oldIndex, newIndex) {
           final ids = clips.map((c) => c.id).toList();
           if (newIndex > oldIndex) newIndex -= 1;
@@ -63,7 +77,10 @@ class TimelineStrip extends ConsumerWidget {
         itemBuilder: (context, index) {
           final clip = clips[index];
           final isLast = index == clips.length - 1;
-          return ReorderableDragStartListener(
+          // Delayed (long-press) drag: with the immediate listener every
+          // horizontal swipe that started on a tile dragged that clip, so
+          // just scrolling the timeline silently reordered the edit.
+          return ReorderableDelayedDragStartListener(
             key: ValueKey(clip.id),
             index: index,
             child: TimelineClipTile(
@@ -72,7 +89,8 @@ class TimelineStrip extends ConsumerWidget {
               pixelsPerSecond: zoom,
               isLast: isLast,
               onTap: () {
-                ref.read(selectedClipIdProvider.notifier).state = clip.id;
+                // Tapping the selected clip again closes its panel (back to the tools).
+                ref.read(selectedClipIdProvider.notifier).state = clip.id == selectedId ? null : clip.id;
                 ref.read(audioPanelOpenProvider.notifier).state = false;
                 ref.read(textPanelOpenProvider.notifier).state = false;
               },
@@ -95,35 +113,55 @@ class TimelineStrip extends ConsumerWidget {
   void _pickTransition(BuildContext context, WidgetRef ref, Clip clip) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Wrap(
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Text(
-                'Transition into next clip',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.8),
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            children: [
+              Row(children: [
+                Expanded(
+                  child: Text('Transition into the next clip', style: Theme.of(sheetContext).textTheme.titleMedium),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    ref.read(projectDatabaseProvider).applyTransitionToAllClips(clip.projectId, clip.transitionOut);
+                    Navigator.pop(sheetContext);
+                  },
+                  icon: const Icon(Icons.done_all, size: 18),
+                  label: const Text('Use on every cut'),
+                ),
+              ]),
+              for (final group in transitionGroups) ...[
+                Padding(
+                  padding: const EdgeInsets.only(top: 10, bottom: 6),
+                  child: Text(group,
+                      style: const TextStyle(color: AppColors.textDim, fontSize: 12, fontWeight: FontWeight.w700)),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final option in transitionOptions.where((o) => o.group == group))
+                      _TransitionOption(
+                        icon: transitionIcon(option.id),
+                        label: option.label,
+                        trendy: option.trendy,
+                        selected: clip.transitionOut == option.id,
+                        onTap: () => _setTransition(ref, sheetContext, clip, option.id),
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 10),
+              const Text(
+                'The preview shows a quick blend; the export draws the real transition.',
+                style: TextStyle(color: AppColors.textFaint, fontSize: 11.5),
               ),
-            ),
-            _TransitionOption(
-              icon: Icons.content_cut,
-              label: 'Cut',
-              selected: clip.transitionOut == 'cut',
-              onTap: () => _setTransition(ref, sheetContext, clip, 'cut'),
-            ),
-            _TransitionOption(
-              icon: Icons.gradient,
-              label: 'Fade',
-              selected: clip.transitionOut == 'fade',
-              onTap: () => _setTransition(ref, sheetContext, clip, 'fade'),
-            ),
-            _TransitionOption(
-              icon: Icons.blur_on,
-              label: 'Cross-dissolve',
-              selected: clip.transitionOut == 'dissolve',
-              onTap: () => _setTransition(ref, sheetContext, clip, 'dissolve'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -146,6 +184,7 @@ class _TransitionOption extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
+  final bool trendy;
   final VoidCallback onTap;
 
   const _TransitionOption({
@@ -153,18 +192,80 @@ class _TransitionOption extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.trendy = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: selected ? Theme.of(context).colorScheme.secondary : Colors.white70,
+    return SizedBox(
+      width: 76,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        onTap: onTap,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Stack(clipBehavior: ui.Clip.none, children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 56,
+              height: 48,
+              decoration: BoxDecoration(
+                color: selected ? AppColors.ember.withValues(alpha: 0.16) : AppColors.surfaceHigh,
+                borderRadius: BorderRadius.circular(AppRadii.sm + 2),
+                border: Border.all(color: selected ? AppColors.ember : AppColors.line, width: selected ? 2 : 1),
+              ),
+              child: Icon(icon, color: selected ? AppColors.ember : AppColors.text, size: 22),
+            ),
+            if (trendy)
+              Positioned(
+                right: -6,
+                top: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(color: AppColors.youtube, borderRadius: BorderRadius.circular(4)),
+                  child: const Text('HOT',
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5)),
+                ),
+              ),
+          ]),
+          const SizedBox(height: 4),
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: selected ? AppColors.ember : AppColors.textDim)),
+        ]),
       ),
-      title: Text(label),
-      trailing: selected ? const Icon(Icons.check, size: 18) : null,
-      onTap: onTap,
+    );
+  }
+}
+
+/// The "+" tile at the end of the timeline.
+class _AddTile extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(6, 8, 12, 8),
+      child: Material(
+        color: AppColors.surfaceHigh,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          side: const BorderSide(color: AppColors.ember, width: 1.4),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          onTap: onTap,
+          child: const SizedBox(
+            width: 52,
+            child: Tooltip(
+              message: 'Add videos or photos',
+              child: Icon(Icons.add_rounded, color: AppColors.ember, size: 28),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

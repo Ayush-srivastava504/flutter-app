@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/project_database.dart';
@@ -47,7 +49,7 @@ class PlayheadControls extends ConsumerWidget {
 
     return Container(
       height: 40,
-      color: Colors.grey[850],
+      color: AppColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         children: [

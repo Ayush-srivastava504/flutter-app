@@ -2,6 +2,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../../app/app_theme.dart';
+
 import '../../models/clip_x.dart';
 
 /// A thin full-width scrub bar beneath the clip strip. Dragging or
@@ -55,7 +57,7 @@ class TimelineScrubBar extends StatelessWidget {
           onTapDown: (d) => handleDrag(d.localPosition),
           child: Container(
             height: 28,
-            color: Colors.grey[850],
+            color: AppColors.surface,
             child: Stack(
               clipBehavior: ui.Clip.none,
               children: [
