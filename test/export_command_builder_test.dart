@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_editor_app/export/export_command_builder.dart';
 import 'package:video_editor_app/export/export_models.dart';
+import 'package:video_editor_app/models/color_filter_x.dart' show buildColorMatrix;
 
 ExportClip clip(String path, int start, int end,
         {String t = 'cut', bool photo = false, bool audio = true, double b = 0, double c = 0, double s = 0, bool muted = false}) =>
@@ -20,7 +21,42 @@ ExportCommand build(List<ExportClip> clips,
 
 String graph(ExportCommand c) => c.args[c.args.indexOf('-filter_complex') + 1];
 
+/// Reads a colorchannelmixer filter the way FFmpeg does: named options by
+/// name, positional ones in FFmpeg's own option order (which has an alpha
+/// slot after each channel). Unset coefficients keep FFmpeg's defaults.
+Map<String, double> parseColorChannelMixer(String filter) {
+  const order = ['rr', 'rg', 'rb', 'ra', 'gr', 'gg', 'gb', 'ga', 'br', 'bg', 'bb', 'ba'];
+  final out = <String, double>{'rr': 1, 'gg': 1, 'bb': 1};
+  final args = filter.substring('colorchannelmixer='.length).split(':');
+  for (var i = 0; i < args.length; i++) {
+    final kv = args[i].split('=');
+    if (kv.length == 2) {
+      out[kv[0]] = double.parse(kv[1]);
+    } else {
+      out[order[i]] = double.parse(kv[0]);
+    }
+  }
+  return out;
+}
+
 void main() {
+  test('colorchannelmixer: every coefficient lands in the slot it was meant for', () {
+    // The bug seen on the phone: 9 positional values shifted into alpha
+    // slots. Parse the generated filter exactly as FFmpeg would.
+    final m = <double>[
+      0.11, 0.12, 0.13, 0, 0, //
+      0.21, 0.22, 0.23, 0, 0, //
+      0.31, 0.32, 0.33, 0, 0, //
+      0, 0, 0, 1, 0, //
+    ];
+    final p = parseColorChannelMixer(ffmpegColorChannelMixerFilter(m));
+    expect(p, {
+      'rr': 0.11, 'rg': 0.12, 'rb': 0.13,
+      'gr': 0.21, 'gg': 0.22, 'gb': 0.23,
+      'br': 0.31, 'bg': 0.32, 'bb': 0.33,
+    });
+  });
+
   test('dimensions follow aspect ratio and are even', () {
     expect(exportDimensions(9 / 16, 720), (720, 1280));
     expect(exportDimensions(9 / 16, 1080), (1080, 1920));
@@ -54,11 +90,71 @@ void main() {
     expect(graph(cmd), contains('fade=t=in:st=0:d=0.300'));
   });
 
-  test('filters map to eq only when non-neutral', () {
+  test('colour sliders add filters only when non-neutral, and never `eq` (missing on the phone)', () {
     final neutral = graph(build([clip('a.mp4', 0, 1000)]));
-    expect(neutral, isNot(contains('eq=')));
+    expect(neutral, isNot(contains('colorchannelmixer')));
+    expect(neutral, isNot(contains('lutrgb')));
     final f = graph(build([clip('a.mp4', 0, 1000, b: 0.1, c: 0.2, s: -0.3)]));
-    expect(f, contains('eq=brightness=0.100:contrast=1.200:saturation=0.700'));
+    expect(f, contains('colorchannelmixer='));
+    expect(f, contains('lutrgb='));
+    expect(f, isNot(contains('eq=')));
+  });
+
+  test('the export colour filters compute the same pixel as the preview matrix', () {
+    // Parse the two filters back into numbers and apply them to a pixel,
+    // then compare with the 4x5 matrix the preview hands to ColorFilter.
+    for (final (b, c, s) in [(0.1, 0.2, -0.3), (-0.25, 0.05, 0.4), (0.0, -0.5, 0.0), (0.3, 0.0, 0.0)]) {
+      final filters = colorAdjustFilters(brightness: b, contrast: c, saturation: s);
+      var mix = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
+      var offs = [0.0, 0.0, 0.0];
+      for (final f in filters) {
+        if (f.startsWith('colorchannelmixer=')) {
+          final named = parseColorChannelMixer(f);
+          mix = [for (final k in ['rr', 'rg', 'rb', 'gr', 'gg', 'gb', 'br', 'bg', 'bb']) named[k] ?? 0];
+        } else if (f.startsWith('lutrgb=')) {
+          offs = RegExp(r'val\+(-?[\d.]+)\*').allMatches(f).map((m) => double.parse(m[1]!)).toList();
+        }
+      }
+      final m = buildColorMatrix(brightness: b, contrast: c, saturation: s);
+      const px = [180.0, 90.0, 40.0];
+      for (var ch = 0; ch < 3; ch++) {
+        final viaExport = mix[ch * 3] * px[0] + mix[ch * 3 + 1] * px[1] + mix[ch * 3 + 2] * px[2] + offs[ch];
+        final viaPreview = m[ch * 5] * px[0] + m[ch * 5 + 1] * px[1] + m[ch * 5 + 2] * px[2] + m[ch * 5 + 4];
+        expect(viaExport, closeTo(viaPreview, 0.05), reason: '($b,$c,$s) channel $ch');
+      }
+    }
+  });
+
+  test('no export graph uses a filter the phone FFmpegKit build lacks', () {
+    // `eq` and `boxblur` are GPL; the non-GPL build omits them (found on a
+    // real phone 2026-11-11: "No such filter: 'eq'"). Exercise every
+    // feature at once and make sure neither sneaks back in.
+    final cmd = buildExportCommand(
+      clips: [
+        const ExportClip(path: 'a.mp4', isPhoto: false, trimStartMs: 0, trimEndMs: 3000, hasAudio: true,
+            brightness: 0.2, contrast: 0.1, saturation: -0.2, look: 'vignette', fitMode: 'blur', speed: 4,
+            transitionOut: 'circleopen', turns: 1, flipH: true),
+        const ExportClip(path: 'p.jpg', isPhoto: true, trimStartMs: 0, trimEndMs: 3000, fitMode: 'fill',
+            look: 'sepia', transitionOut: 'fade'),
+        const ExportClip(path: 'b.mp4', isPhoto: false, trimStartMs: 0, trimEndMs: 3000, hasAudio: true, speed: 0.25),
+      ],
+      overlays: const [],
+      music: const ExportMusic(path: 'm.mp3', trimStartMs: 0, trimEndMs: 5000, fadeInMs: 500, fadeOutMs: 500),
+      aspectRatio: 9 / 16,
+      quality: ExportQuality.p1080,
+      fps: 30,
+      encoder: VideoEncoder.software,
+      outputPath: '/o.mp4',
+      fontPaths: const {'Default': '/f.ttf'},
+      textFilePaths: const {},
+      duckMusic: true,
+    );
+    final names = RegExp(r'(?:^|[,;\]])([a-z0-9_]+)(?==|,|\[|;|$)')
+        .allMatches(graph(cmd))
+        .map((m) => m[1]!)
+        .toSet();
+    expect(names.intersection({'eq', 'boxblur', 'smartblur', 'hqdn3d', 'delogo', 'perspective', 'mpdecimate'}), isEmpty);
+    expect(names, containsAll(['gblur', 'colorchannelmixer', 'lutrgb', 'sidechaincompress', 'xfade']));
   });
 
   test('photos loop for their duration and have no trim; clips without audio get silence', () {

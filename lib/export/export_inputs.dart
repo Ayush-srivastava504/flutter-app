@@ -1,13 +1,9 @@
-import 'package:path/path.dart' as p;
-
 import '../data/project_database.dart';
+import '../models/chroma_key.dart';
+import '../models/media_kind.dart';
 import 'export_models.dart';
 
-/// Same extension set `EditorScreen` uses to infer photo-vs-video (the Clips
-/// table doesn't store media type).
-const Set<String> photoExtensions = {'.jpg', '.jpeg', '.png', '.heic', '.webp', '.gif'};
-
-bool isPhotoPath(String path) => photoExtensions.contains(p.extension(path).toLowerCase());
+export '../models/media_kind.dart' show isPhotoPath, photoExtensions;
 
 /// Maps drift rows to the plain export types. [hasAudio] says which source
 /// files actually contain an audio stream (probed once per file).
@@ -25,7 +21,27 @@ List<ExportClip> exportClipsFrom(List<Clip> rows, Map<String, bool> hasAudio) =>
           muted: c.muted,
           volume: c.volume,
           hasAudio: hasAudio[c.sourceUri] ?? false,
+          look: c.look,
+          lookStrength: c.lookStrength,
+          turns: c.turns,
+          flipH: c.flipH,
+          flipV: c.flipV,
+          // F11: speed is a no-op for photos (nothing to speed up) —
+          // enforced here, not just left to the UI, so a stray non-1.0
+          // value on a photo row (e.g. from old data) can't change a
+          // photo's `-t` duration at export.
+          speed: isPhotoPath(c.sourceUri) ? 1.0 : c.speed,
+          fitMode: c.fitMode,
+          effect: c.effect,
+          effectStrength: c.effectStrength,
+          enhanceSpeech: c.enhanceSpeech,
+          chromaKey: ChromaKeySpec.tryParse(c.keyJson),
         ),
+    ];
+
+List<ExportVoiceOver> exportVoiceOversFrom(List<VoiceOver> rows) => [
+      for (final v in rows)
+        ExportVoiceOver(path: v.sourceUri, startMs: v.startMs, volume: v.volume, enhance: v.enhance),
     ];
 
 List<ExportOverlay> exportOverlaysFrom(List<TextOverlay> rows) => [
@@ -40,6 +56,11 @@ List<ExportOverlay> exportOverlaysFrom(List<TextOverlay> rows) => [
           positionY: o.positionY,
           startMs: o.startMs,
           endMs: o.endMs,
+          bold: o.bold,
+          boxEnabled: o.boxEnabled,
+          boxColorValue: o.boxColorValue,
+          outlineWidth: o.outlineWidth,
+          outlineColorValue: o.outlineColorValue,
         ),
     ];
 
@@ -51,4 +72,6 @@ ExportMusic? exportMusicFrom(AudioTrack? t) => t == null
         trimEndMs: t.trimEndMs,
         offsetMs: t.offsetMs,
         volume: t.volume,
+        fadeInMs: t.fadeInMs,
+        fadeOutMs: t.fadeOutMs,
       );
