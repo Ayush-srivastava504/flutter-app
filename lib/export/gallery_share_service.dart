@@ -38,4 +38,10 @@ class GalleryShareService {
 
   Future<void> share(String path) =>
       Share.shareXFiles([XFile(path, mimeType: 'video/mp4')], text: 'Made with ClipForge');
+
+  /// Opens the share sheet for a non-video export file, e.g. the F29
+  /// FCPXML project file. Generic (unlike [share]) so it's not tied to
+  /// a video mime type.
+  Future<void> shareFile(String path, {required String mimeType, String? text}) =>
+      Share.shareXFiles([XFile(path, mimeType: mimeType)], text: text ?? 'Made with ClipForge');
 }

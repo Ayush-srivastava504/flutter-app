@@ -23,10 +23,22 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   ExportQuality _quality = ExportQuality.p1080;
   int _fps = defaultExportFps;
 
+  /// Light denoise + smart sharpening on every clip (`enhanceFilters`).
+  bool _enhance = true;
+
   @override
   void initState() {
     super.initState();
     _loadSavedChoices();
+    // The controller outlives this screen (so a running export survives
+    // leaving it). A *finished* or failed export, though, belongs to the
+    // edit as it was then — showing it again after the user changed a
+    // filter would hand them the old video. Start fresh instead. Deferred
+    // because providers can't be modified while the tree is building.
+    Future.microtask(() {
+      if (!mounted) return;
+      ref.read(exportControllerProvider(widget.projectId).notifier).resetIfFinished();
+    });
   }
 
   /// F5: reopen on whatever the user exported with last time.
@@ -84,7 +96,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
   Widget _picker(int durationMs, ExportController controller) {
     final seconds = (durationMs / 1000).toStringAsFixed(1);
     final mb = (estimatedExportBytes(_quality, durationMs, fps: _fps) / 1e6).toStringAsFixed(0);
-    final heavy = _fps >= 60 && _quality == ExportQuality.p1080;
+    final heavy = _quality == ExportQuality.p2160 || (_fps >= 60 && _quality == ExportQuality.p1080);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Text('Resolution', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 12),
@@ -110,19 +122,71 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       if (heavy) ...[
         const SizedBox(height: 8),
         const Text(
-          '1080p at 60 fps is demanding. If the export fails, try 30 fps or 720p.',
+          '4K and 1080p at 60 fps are demanding: slower, and not every phone can '
+          'encode them. If the export fails, try 1080p at 30 fps.',
           style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
         ),
       ],
-      const SizedBox(height: 16),
+      const SizedBox(height: 12),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Enhance quality'),
+        subtitle: const Text('Reduces noise and sharpens detail. Export takes a little longer.',
+            style: TextStyle(color: Colors.white54, fontSize: 12)),
+        value: _enhance,
+        onChanged: (v) => setState(() => _enhance = v),
+      ),
+      const SizedBox(height: 8),
       Text('$seconds s • about $mb MB', style: const TextStyle(color: Colors.white60)),
       const SizedBox(height: 24),
       FilledButton.icon(
-        onPressed: () => controller.start(_quality, fps: _fps),
+        onPressed: () => controller.start(_quality, fps: _fps, enhance: _enhance),
         icon: const Icon(Icons.movie_filter_outlined),
         label: const Text('Export video'),
       ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: _exportingProjectFile ? null : _exportProjectFile,
+        icon: _exportingProjectFile
+            ? const SizedBox(
+                width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.description_outlined),
+        label: Text(_exportingProjectFile ? 'Preparing…' : 'Export project file (.fcpxml)'),
+      ),
+      const SizedBox(height: 4),
+      const Text(
+        'For finishing on a desktop editor (Premiere, Resolve, Final Cut). '
+        'Clip order, trims and text carry over; re-add transitions there.',
+        style: TextStyle(color: Colors.white38, fontSize: 11),
+      ),
     ]);
+  }
+
+  bool _exportingProjectFile = false;
+
+  /// F29: builds the FCPXML next to (not instead of) a rendered video —
+  /// this is instant (no ffmpeg run), so unlike [ExportController.start]
+  /// it doesn't need a phase/progress state, just a local busy flag for
+  /// the button.
+  Future<void> _exportProjectFile() async {
+    setState(() => _exportingProjectFile = true);
+    try {
+      final service = ref.read(fcpxmlExportServiceProvider);
+      final path = await service.exportProject(widget.projectId);
+      if (!mounted) return;
+      if (path == null) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Nothing to export yet.')));
+        return;
+      }
+      await ref.read(galleryShareProvider).shareFile(
+            path,
+            mimeType: 'application/xml',
+            text: 'ClipForge project (FCPXML)',
+          );
+    } finally {
+      if (mounted) setState(() => _exportingProjectFile = false);
+    }
   }
 
   Widget _running(ExportState state, ExportController controller) {
@@ -153,6 +217,17 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         textAlign: TextAlign.center,
         style: TextStyle(color: state.savedToGallery ? Colors.white70 : Colors.orangeAccent),
       ),
+      if (state.encoder != null) ...[
+        const SizedBox(height: 6),
+        Text(
+          'Encoded with: ${videoEncoderLabel(state.encoder!)}',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: state.encoder == VideoEncoder.software ? Colors.orangeAccent : Colors.white38,
+          ),
+        ),
+      ],
       const SizedBox(height: 24),
       FilledButton.icon(onPressed: controller.share, icon: const Icon(Icons.ios_share), label: const Text('Share')),
       if (!state.savedToGallery) ...[
@@ -179,7 +254,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       const SizedBox(height: 8),
       Text(f?.message ?? failureMessage(ExportFailureKind.unknown), textAlign: TextAlign.center),
       const SizedBox(height: 24),
-      FilledButton(onPressed: () => controller.start(_quality, fps: _fps), child: const Text('Try again')),
+      FilledButton(onPressed: () => controller.start(_quality, fps: _fps, enhance: _enhance), child: const Text('Try again')),
       if (f?.detail != null)
         TextButton.icon(
           onPressed: () async {
