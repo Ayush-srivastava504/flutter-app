@@ -1,7 +1,37 @@
 import '../data/project_database.dart';
+import 'media_kind.dart';
+
+/// Speed range the editor offers (F11). Outside 0.5–2.0 the export chains
+/// several `atempo` filters — see `atempoChain` in the export builder.
+const double minClipSpeed = 0.25;
+const double maxClipSpeed = 4.0;
 
 extension ClipTiming on Clip {
-  int get trimmedDurationMs => trimEndMs - trimStartMs;
+  bool get isPhoto => isPhotoPath(sourceUri);
+
+  /// The trimmed span of the *source* file, ignoring speed.
+  int get sourceSpanMs => trimEndMs - trimStartMs;
+
+  /// Speed actually applied: photos always play at 1.0 and a corrupt
+  /// (non-positive) value is treated as 1.0, exactly like the export does.
+  double get effectiveSpeed => isPhoto || speed <= 0 ? 1.0 : speed;
+
+  /// How long this clip lasts on the *timeline* (source span / speed). This
+  /// must equal `ExportClip.durationMs` for the same row, or the editor's
+  /// timeline and the exported video disagree about where clips start.
+  int get trimmedDurationMs {
+    final s = effectiveSpeed;
+    return s == 1.0 ? sourceSpanMs : (sourceSpanMs / s).round();
+  }
+
+  /// Converts an offset on the timeline, measured from this clip's start,
+  /// into an offset in the source file measured from `trimStartMs`.
+  int timelineToSourceOffsetMs(int timelineOffsetMs) =>
+      (timelineOffsetMs * effectiveSpeed).round();
+
+  /// Inverse of [timelineToSourceOffsetMs].
+  int sourceToTimelineOffsetMs(int sourceOffsetMs) =>
+      (sourceOffsetMs / effectiveSpeed).round();
 }
 
 /// Where a clip sits on the overall (trimmed) timeline: [startMs, endMs),

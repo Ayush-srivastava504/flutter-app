@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:video_editor_app/data/project_database.dart';
@@ -89,7 +90,7 @@ void main() {
 
       expect(await db.getClip('p1-clip1-b'), isNull);
       expect(await db.getClip('p1-clip1-c'), isNull);
-      expect(await db.watchClips('p1').first.then((c) => c.length), completion(2));
+      expect((await db.watchClips('p1').first).length, 2);
     });
   });
 }
