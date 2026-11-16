@@ -12,6 +12,12 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - build/**
+    # A full Flutter SDK checkout lives in ./flutter (git-ignored). Without
+    # this line `flutter analyze` walks the entire SDK and never finishes.
+    - flutter/**
+    - _work/**
+    - third_party/**
+    - "**/*.g.dart"
     - android/**
     - ios/**
     - web/**
