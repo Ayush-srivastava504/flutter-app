@@ -41,7 +41,8 @@ class ProjectHistory extends ChangeNotifier {
     _subs
       ..add(_db.watchClips(projectId).listen((_) => _schedule()))
       ..add(_db.watchAudioTrack(projectId).listen((_) => _schedule()))
-      ..add(_db.watchTextOverlays(projectId).listen((_) => _schedule()));
+      ..add(_db.watchTextOverlays(projectId).listen((_) => _schedule()))
+      ..add(_db.watchVoiceOvers(projectId).listen((_) => _schedule()));
     notifyListeners();
   }
 

@@ -14,6 +14,15 @@ final clipsProvider =
   return db.watchClips(projectId);
 });
 
+/// The project row itself (name, aspect ratio, ducking). Null once deleted.
+final projectProvider = StreamProvider.family<Project?, String>((ref, projectId) {
+  return ref.watch(projectDatabaseProvider).watchProject(projectId);
+});
+
+/// Before/after compare in the preview: divider position 0..1, or null when
+/// compare is off.
+final compareSplitProvider = StateProvider<double?>((ref) => null);
+
 /// Id of the clip currently selected on the timeline (tapped, or being
 /// trimmed). Null when nothing is selected.
 final selectedClipIdProvider = StateProvider<String?>((ref) => null);
