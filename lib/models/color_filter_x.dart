@@ -74,6 +74,13 @@ bool isNeutralFilter({
 }) =>
     brightness == 0 && contrast == 0 && saturation == 0;
 
+/// Full desaturation (saturation = -1.0) as its own public matrix, so
+/// `models/look_x.dart`'s 'mono' look can reuse this module's Rec. 601
+/// luma weights exactly instead of hand-duplicating them — keeps the
+/// "B&W" look and the `FilterPreset` desaturation slider mathematically
+/// identical rather than two constants that could silently drift apart.
+List<double> monoMatrix() => _saturationMatrix(-1.0);
+
 const List<double> _identityMatrix = [
   1, 0, 0, 0, 0, //
   0, 1, 0, 0, 0, //
@@ -125,6 +132,17 @@ List<double> _saturationMatrix(double saturation) {
 }
 
 double _clamp(double v) => v < -1.0 ? -1.0 : (v > 1.0 ? 1.0 : v);
+
+/// Public wrapper around [_multiply] so a caller outside this file (the
+/// preview widget, layering a F7 look on top of the brightness/contrast/
+/// saturation matrix) can compose two matrices without duplicating the
+/// 5x5-homogeneous-multiply math. `composeMatrices(look, buildColorMatrix(...))`
+/// applies [second] to the pixel first, then [first] to its result —
+/// i.e. the look is layered *after* brightness/contrast/saturation, same
+/// order the export filter graph applies `eq` then the look's own
+/// `colorchannelmixer`/`hue` step.
+List<double> composeMatrices(List<double> first, List<double> second) =>
+    _multiply(first, second);
 
 /// Composes two flat 4x5 affine color matrices as `a ∘ b` — i.e. [b] is
 /// applied to the pixel first, then [a] to its result — by treating
