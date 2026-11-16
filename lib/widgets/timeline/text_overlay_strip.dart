@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/project_database.dart';
@@ -93,7 +95,7 @@ class TextOverlayStrip extends ConsumerWidget {
     return SizedBox(
       height: laneHeight,
       child: Container(
-        color: Colors.grey[850],
+        color: AppColors.surface,
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: rowCount > _maxVisibleRows
             ? SingleChildScrollView(child: body)

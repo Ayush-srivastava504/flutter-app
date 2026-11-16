@@ -15,6 +15,11 @@ TextOverlay _overlay({required int startMs, required int endMs}) =>
       startMs: startMs,
       endMs: endMs,
       alignment: 1,
+      bold: false,
+      boxEnabled: false,
+      boxColorValue: 0x99000000,
+      outlineWidth: 0,
+      outlineColorValue: 0xFF000000,
     );
 
 void main() {

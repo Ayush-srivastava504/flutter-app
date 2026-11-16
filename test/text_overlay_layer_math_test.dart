@@ -35,16 +35,13 @@ void main() {
 
     test(
       'letterboxes left/right when the frame is relatively taller than '
-      'the container (e.g. a square clip in a tall preview)',
+      'the container (e.g. a 9:16 clip in a square preview)',
       () {
-        final frame = letterboxedFrame(const Size(360, 640), 1.0);
-        expect(frame.size.height, 640);
+        final frame = letterboxedFrame(const Size(360, 360), 9 / 16);
+        expect(frame.size.height, 360);
         expect(frame.offset.dy, 0);
         expect(frame.offset.dx, greaterThan(0));
-        expect(
-          frame.offset.dx * 2 + frame.size.width,
-          closeTo(360, 0.01),
-        );
+        expect(frame.offset.dx * 2 + frame.size.width, closeTo(360, 0.01));
       },
     );
 

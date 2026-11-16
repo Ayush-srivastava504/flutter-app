@@ -143,27 +143,66 @@ class _PositionedOverlay extends StatelessWidget {
             constraints: BoxConstraints(maxWidth: frameSize.width * 0.9),
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
+              // F8: the background-box toggle, painted behind the text
+              // itself (same `boxColorValue` export's `drawtext
+              // box=1:boxcolor=...` uses).
+              color: overlay.boxEnabled ? Color(overlay.boxColorValue) : null,
               border: isSelected
                   ? Border.all(color: Colors.white70, width: 1)
                   : null,
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Text(
-              overlay.content,
-              textAlign: textAlignForIndex(overlay.alignment),
-              style: TextStyle(
-                color: Color(overlay.colorValue),
-                fontSize: overlay.fontSize,
-                fontFamily: textFontPresets[overlay.fontFamily],
-                fontWeight: FontWeight.w600,
-                shadows: const [
-                  Shadow(blurRadius: 4, color: Colors.black87),
-                ],
-              ),
-            ),
+            child: _StyledOverlayText(overlay: overlay),
           ),
         ),
       ),
     );
+  }
+}
+
+/// F8: renders [overlay]'s fill text, plus — when [TextOverlay.outlineWidth]
+/// is set — a stroked copy of the same text behind it. `TextStyle` has no
+/// native stroke, so this is the standard Flutter trick: two `Text`
+/// widgets stacked, the back one painted with a stroke `Paint` via
+/// `foreground`, the front one the normal filled text. [TextOverlay.bold]
+/// uses a real heavier `FontWeight` here (unlike export's `drawtext`,
+/// which has no bold font file bundled and has to fake it with a thin
+/// border instead — see `export_command_builder.dart`'s doc comment on
+/// that).
+class _StyledOverlayText extends StatelessWidget {
+  final TextOverlay overlay;
+
+  const _StyledOverlayText({required this.overlay});
+
+  @override
+  Widget build(BuildContext context) {
+    final weight = overlay.bold ? FontWeight.w900 : FontWeight.w600;
+    final fill = Text(
+      overlay.content,
+      textAlign: textAlignForIndex(overlay.alignment),
+      style: TextStyle(
+        color: Color(overlay.colorValue),
+        fontSize: overlay.fontSize,
+        fontFamily: textFontPresets[overlay.fontFamily],
+        fontWeight: weight,
+        shadows: const [Shadow(blurRadius: 4, color: Colors.black87)],
+      ),
+    );
+    if (overlay.outlineWidth <= 0) return fill;
+
+    final stroke = Text(
+      overlay.content,
+      textAlign: textAlignForIndex(overlay.alignment),
+      style: TextStyle(
+        fontSize: overlay.fontSize,
+        fontFamily: textFontPresets[overlay.fontFamily],
+        fontWeight: weight,
+        foreground: Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = overlay.outlineWidth
+          ..color = Color(overlay.outlineColorValue),
+      ),
+    );
+    return Stack(alignment: Alignment.center, children: [stroke, fill]);
   }
 }

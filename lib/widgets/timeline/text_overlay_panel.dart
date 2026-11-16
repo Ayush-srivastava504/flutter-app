@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database_provider.dart';
@@ -37,6 +39,15 @@ class _TextOverlayPanelState extends ConsumerState<TextOverlayPanel> {
   late double _startMs;
   late double _endMs;
 
+  // F8 (text styling v2). Outline is exposed as a simple on/off toggle
+  // at a fixed width/color (the schema columns support a configurable
+  // width and color, but a toggle is all v1's UI exposes — see
+  // `_outlineWidthWhenOn`).
+  late bool _bold;
+  late bool _boxEnabled;
+  late bool _outlineEnabled;
+  static const double _outlineWidthWhenOn = 2.0;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +70,9 @@ class _TextOverlayPanelState extends ConsumerState<TextOverlayPanel> {
     _alignment = o.alignment;
     _startMs = o.startMs.toDouble();
     _endMs = o.endMs.toDouble();
+    _bold = o.bold;
+    _boxEnabled = o.boxEnabled;
+    _outlineEnabled = o.outlineWidth > 0;
   }
 
   @override
@@ -79,8 +93,26 @@ class _TextOverlayPanelState extends ConsumerState<TextOverlayPanel> {
             alignment: _alignment,
             startMs: _startMs.round(),
             endMs: _endMs.round(),
+            bold: _bold,
+            boxEnabled: _boxEnabled,
+            outlineWidth: _outlineEnabled ? _outlineWidthWhenOn : 0,
           ),
         );
+  }
+
+  void _toggleBold() {
+    setState(() => _bold = !_bold);
+    _commit();
+  }
+
+  void _toggleBox() {
+    setState(() => _boxEnabled = !_boxEnabled);
+    _commit();
+  }
+
+  void _toggleOutline() {
+    setState(() => _outlineEnabled = !_outlineEnabled);
+    _commit();
   }
 
   Future<void> _delete() async {
@@ -107,7 +139,7 @@ class _TextOverlayPanelState extends ConsumerState<TextOverlayPanel> {
     final endMs = _endMs.clamp(minEndMs, maxMs);
 
     return Container(
-      color: Colors.grey[900],
+      color: AppColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: SingleChildScrollView(
         child: Column(
@@ -171,6 +203,30 @@ class _TextOverlayPanelState extends ConsumerState<TextOverlayPanel> {
               label: _fontSize.round().toString(),
               onChanged: (v) => setState(() => _fontSize = v),
               onChangeEnd: (_) => _commit(),
+            ),
+            const _SectionLabel('Style'),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilterChip(
+                  label: const Text('Bold'),
+                  avatar: const Icon(Icons.format_bold, size: 16),
+                  selected: _bold,
+                  onSelected: (_) => _toggleBold(),
+                ),
+                FilterChip(
+                  label: const Text('Background'),
+                  avatar: const Icon(Icons.crop_square, size: 16),
+                  selected: _boxEnabled,
+                  onSelected: (_) => _toggleBox(),
+                ),
+                FilterChip(
+                  label: const Text('Outline'),
+                  avatar: const Icon(Icons.border_color_outlined, size: 16),
+                  selected: _outlineEnabled,
+                  onSelected: (_) => _toggleOutline(),
+                ),
+              ],
             ),
             const _SectionLabel('Color'),
             SizedBox(
