@@ -9,6 +9,8 @@ import 'package:ffmpeg_kit_flutter_new_full/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/ffprobe_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_full/return_code.dart';
 
+import '../ai/media_analysis.dart' show MediaAnalyzer;
+
 class EngineResult {
   final bool success;
   final bool cancelled;
@@ -29,9 +31,35 @@ abstract class ExportEngine {
   Future<void> cancel();
 }
 
-class FfmpegKitEngine implements ExportEngine {
+class FfmpegKitEngine implements ExportEngine, MediaAnalyzer {
   static const int _maxLogChars = 20000;
+
+  /// Analysis results *are* the log, so it is kept whole up to this cap
+  /// (~hours of silencedetect output) instead of being trimmed to a tail.
+  static const int _maxAnalysisLogChars = 2000000;
   int? _sessionId;
+
+  @override
+  Future<String> analyze(List<String> args) {
+    final done = Completer<String>();
+    final log = StringBuffer();
+    unawaited(() async {
+      try {
+        await FFmpegKit.executeWithArgumentsAsync(
+          args,
+          (finished) async {
+            if (!done.isCompleted) done.complete(log.toString());
+          },
+          (l) {
+            if (log.length < _maxAnalysisLogChars) log.writeln(l.getMessage());
+          },
+        );
+      } catch (e) {
+        if (!done.isCompleted) done.completeError(StateError('FFmpegKit failed to start: $e'));
+      }
+    }());
+    return done.future;
+  }
 
   @override
   Future<bool> hasAudioStream(String path) async {

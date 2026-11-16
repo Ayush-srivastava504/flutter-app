@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../data/database_provider.dart';
+import '../services/analytics_service.dart';
 import 'export_models.dart';
 import 'export_notifier.dart';
 import 'export_service.dart';
+import 'fcpxml_export_service.dart';
 import 'gallery_share_service.dart';
 
 enum ExportPhase { idle, running, done, failed }
@@ -14,6 +16,9 @@ class ExportState {
   final ExportPhase phase;
   final double progress;
   final String? outputPath;
+
+  /// Encoder that produced [outputPath].
+  final VideoEncoder? encoder;
   final bool savedToGallery;
   final String? saveError; // gallery save failed but the file exists
   final ExportFailure? failure;
@@ -22,6 +27,7 @@ class ExportState {
     this.phase = ExportPhase.idle,
     this.progress = 0,
     this.outputPath,
+    this.encoder,
     this.savedToGallery = false,
     this.saveError,
     this.failure,
@@ -31,6 +37,7 @@ class ExportState {
     ExportPhase? phase,
     double? progress,
     String? outputPath,
+    VideoEncoder? encoder,
     bool? savedToGallery,
     String? saveError,
     bool clearSaveError = false,
@@ -41,6 +48,7 @@ class ExportState {
         phase: phase ?? this.phase,
         progress: progress ?? this.progress,
         outputPath: outputPath ?? this.outputPath,
+        encoder: encoder ?? this.encoder,
         savedToGallery: savedToGallery ?? this.savedToGallery,
         saveError: clearSaveError ? null : (saveError ?? this.saveError),
         failure: clearFailure ? null : (failure ?? this.failure),
@@ -55,7 +63,7 @@ class ExportController extends StateNotifier<ExportState> {
 
   ExportController(this._service, this._notifier, this._gallery, this.projectId) : super(const ExportState());
 
-  Future<void> start(ExportQuality quality, {int fps = defaultExportFps}) async {
+  Future<void> start(ExportQuality quality, {int fps = defaultExportFps, bool enhance = false}) async {
     if (state.phase == ExportPhase.running) return;
     state = const ExportState(phase: ExportPhase.running);
     await _notifier.init();
@@ -65,18 +73,31 @@ class ExportController extends StateNotifier<ExportState> {
         projectId: projectId,
         quality: quality,
         fps: fps,
+        enhance: enhance,
         onProgress: (v) {
           if (!mounted) return;
           state = state.copyWith(progress: v);
           _notifier.progress(v);
         },
       );
-      state = state.copyWith(phase: ExportPhase.done, progress: 1, outputPath: file.path);
+      state = state.copyWith(
+        phase: ExportPhase.done,
+        progress: 1,
+        outputPath: file.path,
+        encoder: _service.lastEncoderUsed,
+      );
+      Analytics.instance.log('export_done', {
+        'quality': quality.name,
+        'fps': fps,
+        'enhance': enhance ? 1 : 0,
+        'encoder': _service.lastEncoderUsed?.name ?? 'unknown',
+      });
       await _saveToGallery(); // deliverable: saved automatically, share offered next
       await _notifier.finished(success: true);
     } on ExportFailure catch (f) {
       if (!mounted) return;
       state = ExportState(phase: ExportPhase.failed, failure: f);
+      Analytics.instance.log('export_failed', {'kind': f.kind.name});
       await _notifier.finished(success: false, message: f.message);
     } catch (e, st) {
       debugPrint('[export] unexpected error: $e\n$st');
@@ -113,10 +134,24 @@ class ExportController extends StateNotifier<ExportState> {
   }
 
   void reset() => state = const ExportState();
+
+  /// Back to the settings picker unless an export is still running.
+  void resetIfFinished() {
+    if (state.phase == ExportPhase.done || state.phase == ExportPhase.failed) reset();
+  }
 }
 
 final exportNotifierProvider = Provider<ExportNotifier>((ref) => ExportNotifier());
 final galleryShareProvider = Provider<GalleryShareService>((ref) => GalleryShareService());
+
+/// F29: project-interchange (FCPXML) export service, separate from the
+/// rendered-video [ExportService] above — it's synchronous-fast (no
+/// ffmpeg run, no progress), so it doesn't go through [ExportController]'s
+/// phase machine; see [FcpxmlExportService.exportProject] used directly
+/// from `ExportScreen`.
+final fcpxmlExportServiceProvider = Provider<FcpxmlExportService>(
+  (ref) => FcpxmlExportService(db: ref.watch(projectDatabaseProvider)),
+);
 
 /// Not autoDispose: leaving the Export screen must not kill a running export.
 final exportControllerProvider = StateNotifierProvider.family<ExportController, ExportState, String>(

@@ -38,7 +38,7 @@ String after(ExportCommand c, String flag) => c.args[c.args.indexOf(flag) + 1];
 void main() {
   group('480p', () {
     test('is offered, in ascending order', () {
-      expect(ExportQuality.values, [ExportQuality.p480, ExportQuality.p720, ExportQuality.p1080]);
+      expect(ExportQuality.values, [ExportQuality.p480, ExportQuality.p720, ExportQuality.p1080, ExportQuality.p2160]);
       expect(ExportQuality.p480.label, '480p');
       expect(ExportQuality.p480.shortSide, 480);
     });
@@ -54,7 +54,7 @@ void main() {
       final cmd = build([video('a.mp4')], q: ExportQuality.p480);
       expect((cmd.width, cmd.height), (480, 854));
       expect(graph(cmd), contains('scale=480:854:force_original_aspect_ratio=decrease'));
-      expect(after(cmd, '-b:v'), '2500000');
+      expect(after(cmd, '-b:v'), '4000000');
     });
   });
 
@@ -64,7 +64,7 @@ void main() {
       expect(cmd.args.join(' '), contains('-loop 1 -framerate 30 -t 2.000 -i p.jpg'));
       expect('fps=30'.allMatches(graph(cmd)).length, 2);
       expect(after(cmd, '-r'), '30');
-      expect(after(cmd, '-b:v'), '5000000');
+      expect(after(cmd, '-b:v'), '8000000');
     });
 
     for (final fps in exportFpsOptions) {
@@ -97,17 +97,18 @@ void main() {
 
   group('bitrate and size estimate', () {
     test('60 fps gets 1.5x the base bitrate; 24 and 30 use the base', () {
-      expect(exportVideoBitrate(ExportQuality.p720, 24), 5000000);
-      expect(exportVideoBitrate(ExportQuality.p720, 30), 5000000);
-      expect(exportVideoBitrate(ExportQuality.p720, 60), 7500000);
-      expect(exportVideoBitrate(ExportQuality.p1080, 60), 15000000);
-      expect(exportVideoBitrate(ExportQuality.p480, 60), 3750000);
+      expect(exportVideoBitrate(ExportQuality.p720, 24), 8000000);
+      expect(exportVideoBitrate(ExportQuality.p720, 30), 8000000);
+      expect(exportVideoBitrate(ExportQuality.p720, 60), 12000000);
+      expect(exportVideoBitrate(ExportQuality.p1080, 30), 16000000);
+      expect(exportVideoBitrate(ExportQuality.p1080, 60), 24000000);
+      expect(exportVideoBitrate(ExportQuality.p480, 60), 6000000);
     });
 
     test('command uses the fps-adjusted bitrate on every encoder', () {
       for (final e in VideoEncoder.values) {
         final cmd = build([video('a.mp4')], fps: 60, encoder: e);
-        expect(after(cmd, '-b:v'), '7500000', reason: e.name);
+        expect(after(cmd, '-b:v'), '12000000', reason: e.name);
       }
     });
 

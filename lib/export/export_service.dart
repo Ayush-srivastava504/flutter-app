@@ -63,6 +63,9 @@ class ExportService {
   final Future<Directory> Function() _tempDir;
   final List<VideoEncoder> _encoders;
 
+  /// Which encoder produced the last successful export (shown to the user).
+  VideoEncoder? lastEncoderUsed;
+
   ExportService({
     required this.db,
     ExportEngine? engine,
@@ -72,7 +75,7 @@ class ExportService {
         _tempDir = tempDir ?? getTemporaryDirectory,
         _encoders = encoders ??
             [
-              if (Platform.isAndroid) VideoEncoder.androidHardware,
+              if (Platform.isAndroid) ...[VideoEncoder.androidHardwareHigh, VideoEncoder.androidHardware],
               if (Platform.isIOS) VideoEncoder.iosHardware,
               VideoEncoder.software, // always last: slower, but works everywhere
             ];
@@ -92,6 +95,7 @@ class ExportService {
     required String projectId,
     required ExportQuality quality,
     int fps = defaultExportFps,
+    bool enhance = false,
     required void Function(double progress) onProgress,
   }) async {
     final project = await db.getProject(projectId);
@@ -101,9 +105,14 @@ class ExportService {
     }
     final overlayRows = await db.watchTextOverlays(projectId).first;
     final audioRow = await db.getAudioTrack(projectId);
+    final voiceRows = await db.getVoiceOvers(projectId);
 
     // Fail early, and clearly, if a source vanished (user deleted it, SD card…).
-    final sources = [...clipRows.map((c) => c.sourceUri), if (audioRow != null) audioRow.sourceUri];
+    final sources = [
+      ...clipRows.map((c) => c.sourceUri),
+      if (audioRow != null) audioRow.sourceUri,
+      ...voiceRows.map((v) => v.sourceUri),
+    ];
     for (final path in sources) {
       if (!await File(path).exists()) {
         throw ExportFailure(ExportFailureKind.sourceMissing, failureMessage(ExportFailureKind.sourceMissing),
@@ -148,6 +157,9 @@ class ExportService {
           outputPath: output,
           fontPaths: fonts,
           textFilePaths: textFiles,
+          duckMusic: project.duckMusic,
+          enhance: enhance,
+          voiceOvers: exportVoiceOversFrom(voiceRows),
         );
         onProgress(0);
         final result = await engine.run(cmd.args, onTimeMs: (t) {
@@ -156,6 +168,9 @@ class ExportService {
 
         if (result.success && await File(output).exists() && await File(output).length() > 0) {
           onProgress(1);
+          lastEncoderUsed = _encoders[i];
+          debugPrint('[export] OK encoder: ${_encoders[i].name} quality: ${quality.label} @ $fps fps '
+              'enhance: $enhance\ncommand: ffmpeg ${cmd.args.join(' ')}');
           return File(output);
         }
         if (result.cancelled) {
