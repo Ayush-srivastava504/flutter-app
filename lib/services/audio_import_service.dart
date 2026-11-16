@@ -36,7 +36,7 @@ class AudioImportService {
     final path = picked?.path;
     if (path == null) return null;
 
-    final persistedPath = await _storageService.persistToDocuments(path);
+    final persistedPath = await _storageService.persistToDocuments(path, consumeCacheSource: true);
     final duration =
         await _metadataService.readDuration(persistedPath) ?? Duration.zero;
 

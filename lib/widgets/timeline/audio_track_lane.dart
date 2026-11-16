@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/project_database.dart';
@@ -39,7 +41,7 @@ class AudioTrackLane extends ConsumerWidget {
         child: InkWell(
           onTap: onImport,
           child: Container(
-            color: Colors.grey[850],
+            color: AppColors.surface,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             alignment: Alignment.centerLeft,
             child: const Row(
@@ -75,7 +77,7 @@ class AudioTrackLane extends ConsumerWidget {
           ref.read(textPanelOpenProvider.notifier).state = false;
         },
         child: Container(
-          color: Colors.grey[850],
+          color: AppColors.surface,
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: LayoutBuilder(
             builder: (context, constraints) {

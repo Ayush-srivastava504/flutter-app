@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+
+import '../../app/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database_provider.dart';
 import '../../data/project_database.dart';
 import '../../providers/audio_providers.dart';
+import '../../providers/timeline_providers.dart';
 
 /// Shown when the project's background-music track is selected (tapped
 /// on [AudioTrackLane]): trim handles over the *source file's* full
@@ -34,7 +37,14 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
   late int _offset;
   late double _volume;
 
+  // F9: music fade in/out, each capped below at `_maxFadeMs` by the
+  // slider itself (see `build`) rather than here, so the cap can react
+  // to how long the (possibly just-changed) trimmed window actually is.
+  late int _fadeInMs;
+  late int _fadeOutMs;
+
   static const int _minTrimmedMs = 200;
+  static const int _maxFadeMs = 5000;
 
   @override
   void initState() {
@@ -45,7 +55,9 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
   @override
   void didUpdateWidget(covariant AudioTrackPanel old) {
     super.didUpdateWidget(old);
-    if (old.track.id != widget.track.id) _loadFrom(widget.track);
+    // Also reload when the row changed underneath us (undo/redo, an
+    // assistant edit) — not only when a different track is attached.
+    if (old.track != widget.track) _loadFrom(widget.track);
   }
 
   void _loadFrom(AudioTrack t) {
@@ -53,6 +65,8 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
     _trimEnd = t.trimEndMs;
     _offset = t.offsetMs;
     _volume = t.volume;
+    _fadeInMs = t.fadeInMs;
+    _fadeOutMs = t.fadeOutMs;
   }
 
   void _commit() {
@@ -62,6 +76,8 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
             trimEndMs: _trimEnd,
             offsetMs: _offset,
             volume: _volume,
+            fadeInMs: _fadeInMs,
+            fadeOutMs: _fadeOutMs,
           ),
         );
   }
@@ -85,7 +101,7 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
         : trimmedMs;
 
     return Container(
-      color: Colors.grey[900],
+      color: AppColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -232,6 +248,79 @@ class _AudioTrackPanelState extends ConsumerState<AudioTrackPanel> {
               const Icon(Icons.volume_up, color: Colors.white54, size: 18),
             ],
           ),
+          const _SectionLabel('Fade in / out'),
+          Builder(builder: (context) {
+            // Fades are measured from the trimmed window's own length
+            // (see `AudioTracks.fadeInMs`'s doc comment), so neither
+            // slider should be draggable past half that length — past
+            // halfway the in/out fades would overlap, which `afade`
+            // doesn't handle meaningfully.
+            final trimmedMs = (_trimEnd - _trimStart).clamp(1, 1 << 30);
+            final maxFade = (trimmedMs / 2).floor().clamp(0, _maxFadeMs);
+            final fadeIn = _fadeInMs.clamp(0, maxFade);
+            return Row(
+              children: [
+                const Icon(Icons.trending_up, color: Colors.white54, size: 18),
+                Expanded(
+                  child: Slider(
+                    value: fadeIn.toDouble(),
+                    max: maxFade.toDouble().clamp(1, double.infinity),
+                    onChanged: (v) => setState(() => _fadeInMs = v.round()),
+                    onChangeEnd: (_) => _commit(),
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    '${(fadeIn / 1000).toStringAsFixed(1)}s',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+              ],
+            );
+          }),
+          Builder(builder: (context) {
+            final trimmedMs = (_trimEnd - _trimStart).clamp(1, 1 << 30);
+            final maxFade = (trimmedMs / 2).floor().clamp(0, _maxFadeMs);
+            final fadeOut = _fadeOutMs.clamp(0, maxFade);
+            return Row(
+              children: [
+                const Icon(Icons.trending_down, color: Colors.white54, size: 18),
+                Expanded(
+                  child: Slider(
+                    value: fadeOut.toDouble(),
+                    max: maxFade.toDouble().clamp(1, double.infinity),
+                    onChanged: (v) => setState(() => _fadeOutMs = v.round()),
+                    onChangeEnd: (_) => _commit(),
+                  ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: Text(
+                    '${(fadeOut / 1000).toStringAsFixed(1)}s',
+                    style: const TextStyle(color: Colors.white38, fontSize: 11),
+                  ),
+                ),
+              ],
+            );
+          }),
+          // F19: ducking lives on the project row, not the track, so it is
+          // read from `projectProvider` rather than `widget.track`.
+          Consumer(builder: (context, ref, _) {
+            final projectId = widget.track.projectId;
+            final duck = ref.watch(projectProvider(projectId)).value?.duckMusic ?? false;
+            return SwitchListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Lower music under clip sound',
+                  style: TextStyle(color: Colors.white70, fontSize: 12)),
+              subtitle: const Text('Applied in the exported video',
+                  style: TextStyle(color: Colors.white38, fontSize: 11)),
+              value: duck,
+              onChanged: (v) =>
+                  ref.read(projectDatabaseProvider).setDuckMusic(projectId, v),
+            );
+          }),
         ],
       ),
     );
