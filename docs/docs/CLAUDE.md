@@ -60,6 +60,7 @@ Noticed, not changed:
 |---|---|
 | `docs/FACTS.md` | **always** — verified facts, known bugs, unknowns |
 | `docs/APP_GUIDE.md` | architecture, data model, flows, feature recipe (§10) |
+| `docs/MASTER_PLAN.md` | the big picture: Photo + Video Studio phases, IDs (P*, V*, X*), owner decisions D1–D7, phone FFmpeg capability map |
 | `docs/FEATURE_PLAN_25.md` | building feature F1…F25 (one feature = one session) |
 | `docs/DEPENDENCIES.md` | before using any package API or adding a package |
 | `docs/FFMPEG_COOKBOOK.md` | any export/filter change |

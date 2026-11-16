@@ -34,24 +34,28 @@ Written so that **one feature = one Claude session**. Read `docs/APP_GUIDE.md` f
 
 ## 2. Schema map (planned order)
 
-`schemaVersion` is **5** today. Numbers below are a suggestion; always use the *next free* one when you build.
+`schemaVersion` is **6** today (F7–F11's columns shipped together in one
+migration, 2026-11-08 — see the Tier 2 note below on why that's a
+deliberate change from the "one version per feature" plan below).
+Numbers below for the *remaining* features are a suggestion; always use
+the *next free* one when you build.
 
 | Feature | Schema change | Version |
 |---|---|---|
-| F7 Looks | `Clips.look` (text, nullable) | 6 |
-| F8 Text style | `TextOverlays`: `bold`, `boxEnabled`, `boxColor`, `outlineWidth`, `outlineColor` | 7 |
-| F9 Music fades | `AudioTracks.fadeInMs`, `fadeOutMs` | 8 |
-| F10 Rotate/flip | `Clips.turns` (0–3), `flipH`, `flipV` | 9 |
-| F11 Speed | `Clips.speed` (real, default 1.0) | 10 |
-| F14 Crop/zoom | `Clips.zoom`, `panX`, `panY`, `kenBurns` | 11 |
-| F15 Fit mode | `Clips.fitMode` (text: fit/fill/blur) | 12 |
-| F16 Image overlays | new table `ImageOverlays` | 13 |
-| F17 Reverse | `Clips.reversed` | 14 |
-| F18 Audio lanes | `AudioTracks.kind`, `lane` | 15 |
-| F19 Ducking | `Projects.duckMusic`, `duckAmount` | 16 |
-| F23 Keyframes | new table `Keyframes` | 17 |
-| F24 PiP | new table `OverlayClips` | 18 |
-| F25 Chroma key | columns on `OverlayClips` | 19 |
+| F7 Looks | `Clips.look` (text, nullable) | 6 ✅ |
+| F8 Text style | `TextOverlays`: `bold`, `boxEnabled`, `boxColorValue`, `outlineWidth`, `outlineColorValue` | 6 ✅ |
+| F9 Music fades | `AudioTracks.fadeInMs`, `fadeOutMs` | 6 ✅ |
+| F10 Rotate/flip | `Clips.turns` (0–3), `flipH`, `flipV` | 6 ✅ |
+| F11 Speed | `Clips.speed` (real, default 1.0) | 6 ✅ |
+| F14 Crop/zoom | `Clips.zoom`, `panX`, `panY`, `kenBurns` | 7 |
+| F15 Fit mode | `Clips.fitMode` (text: fit/fill/blur) | 8 |
+| F16 Image overlays | new table `ImageOverlays` | 9 |
+| F17 Reverse | `Clips.reversed` | 10 |
+| F18 Audio lanes | `AudioTracks.kind`, `lane` | 11 |
+| F19 Ducking | `Projects.duckMusic`, `duckAmount` | 12 |
+| F23 Keyframes | new table `Keyframes` | 13 |
+| F24 PiP | new table `OverlayClips` | 14 |
+| F25 Chroma key | columns on `OverlayClips` | 15 |
 
 ---
 
@@ -95,44 +99,57 @@ Written so that **one feature = one Claude session**. Read `docs/APP_GUIDE.md` f
 - *Done when:* a 16:9 project exports 1920×1080 at 1080p; mixed-orientation clips letterbox correctly in both.
 - *Note:* not in the undo snapshot today (Projects row). Either accept that or add aspect ratio to `ProjectSnapshot`; say which in the summary.
 
-### TIER 2 — Medium-easy (one new column + preview + export)
+### TIER 2 — Medium-easy (one new column + preview + export) — ✅ all shipped 2026-11-08
 
-**F7 · Look presets (B&W, sepia, vintage, cool, warm, vignette)** — B · M
-- *Schema:* `Clips.look`. Applies *in addition to* the brightness/contrast/saturation sliders.
-- *Preview:* extend `models/color_filter_x.dart` (colour-matrix math, already unit-tested) with one matrix per look; vignette via a radial-gradient overlay in `_FilterPreview`.
-- *Export:* in `export_command_builder.dart` after the `eq` step: mono `hue=s=0`; sepia `colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131:0`; cool/warm `colorbalance` or `colortemperature`-style `colorchannelmixer`; vignette `vignette`.
-- *Done when:* tests assert each look's filter string; `graph` renders every look; "apply to all" also sets looks.
+All six landed in one session, in a single schema migration (v5→v6)
+rather than one version per feature as originally sketched — simpler to
+review as one block, and every new column defaults to a neutral value
+(null look, 0 turns, 1.0x speed, no fade, no box/outline) so it's a
+no-op for every clip/overlay/track that existed before the migration.
+**Not yet run through `flutter test` or on a real device** — built and
+cross-checked by porting the pure-logic pieces (filter-string
+construction, duration math) to Python and running equivalent
+assertions, since this pass had no Flutter/Dart toolchain available.
+Run `flutter pub run build_runner build --delete-conflicting-outputs`
+(`scripts/dev.sh gen`) and `flutter test` before trusting it fully.
 
-**F8 · Text styling v2** — B · M
-- *Schema:* bold, background box + colour, outline width + colour on `TextOverlays`.
-- *Work:* panel controls in `text_overlay_panel.dart`; preview in `text_overlay_layer.dart`. Export: `drawtext` options `box=1:boxcolor=…@…:boxborderw=…`, `borderw=…:bordercolor=…`; bundle `DejaVuSans-Bold.ttf` (same licence) and map "Default bold" in `ExportService._fontAssets`. Honour left/right alignment in export by computing `x` from the overlay position instead of centring (note: `text_align` is not reliable across FFmpeg builds).
-- *Risk:* preview font vs export font look slightly different; accept, but keep size scaling consistent (`previewReferenceWidth`).
+**F7 · Look presets (B&W, sepia, vintage, cool, warm, vignette)** — B · M — ✅
+- *Schema:* `Clips.look`, applied in addition to the brightness/contrast/saturation sliders, via `models/look_x.dart` + `FilterPanel`'s new chip row.
+- **Deviation from plan:** every look matrix is bias-free (pure channel-mix, no additive offset) rather than the sepia-style formula with a lift/shift for vintage/cool/warm. FFmpeg's `colorchannelmixer` has no additive term, so a bias-free matrix is the only way for the *same* matrix to drive preview (`ColorFilter.matrix`) and export (`colorchannelmixer`) with zero drift between them — see `look_x.dart`'s doc comment. Vintage reads a little less "faded" than a bias version would, as a result.
+- *Export:* `export_command_builder.dart`'s `lookFilters`/`ffmpegColorChannelMixerFilter`, derived straight from the same `look_x.dart` matrix.
+- **Not done:** no "apply to all clips" for looks (stays per-clip only, unlike the brightness/contrast/saturation scope toggle).
 
-**F9 · Music fade in/out + master volume** — B · S
-- *Schema:* `AudioTracks.fadeInMs`, `fadeOutMs`.
-- *Preview:* ramp `just_audio` volume near the start/end in `VideoPreviewPlayer._syncMusic`.
-- *Export:* append `afade=t=in:st=0:d=…` and `afade=t=out:st=…:d=…` to the music chain *before* `adelay`. Fade-out start = trimmed length − fade.
-- *Done when:* test asserts the filter text; fades longer than the trimmed track are clamped.
+**F8 · Text styling v2** — B · M — ✅
+- *Schema:* `bold`, `boxEnabled`, `boxColorValue`, `outlineWidth`, `outlineColorValue` on `TextOverlays`.
+- *Preview:* `text_overlay_layer.dart`'s new `_StyledOverlayText` — real `FontWeight.w900` for bold, a stroked second `Text` behind the fill for outline, box via the container's `BoxDecoration.color`.
+- *Export:* `drawtext` gets `box=1:boxcolor=…:boxborderw=…` and `borderw=…:bordercolor=…`.
+- **Deviation from plan:** no bold font file bundled (`DejaVuSans-Bold.ttf` was the planned approach). Export instead fakes bold with a thin same-color `borderw` — a real bold weight isn't achievable with a single font file and `drawtext`'s `fontfile=`. Preview's bold is the real thing (Flutter has font weights), so preview and export won't look identical for bold text — same kind of approximation gap F7's vignette already has.
+- *UI scope cut:* box/outline are on/off toggles at a fixed width/color in this pass, not independently configurable — the schema columns support it, the panel doesn't expose it yet.
+- **Not done:** left/right alignment in export still centers (`x=…*w-text_w/2`) rather than computing `x` from alignment — that part of the original plan wasn't touched this pass.
 
-**F10 · Rotate and flip clip** — B · M
-- *Schema:* `Clips.turns` (0–3 quarter turns), `flipH`, `flipV` (separate from the container flag `rotationDegrees`; never mix them).
-- *Preview:* `Transform.rotate`/`Transform.flip` around the video widget; aspect ratio swaps on odd turns (use it in `letterboxedFrame`).
-- *Export:* **before** scale/pad insert `transpose=1` / `transpose=2` / `hflip` / `vflip` (FFmpeg already auto-rotates the container flag, so these apply on top of it).
-- *Done when:* a 90°-turned landscape clip fills a portrait project correctly in preview and export.
+**F9 · Music fade in/out** — B · S — ✅ (master volume was already `AudioTracks.volume`, pre-existing)
+- *Schema:* `AudioTracks.fadeInMs`, `fadeOutMs`; sliders in `AudioTrackPanel`, capped at half the trimmed length (so in/out can't overlap).
+- *Preview:* a linear volume ramp in `VideoPreviewPlayer._syncMusic`/`_musicFadeMultiplier` — an approximation, not frame-accurate, same relationship every other preview/export pair in this app has.
+- *Export:* `afade=t=in:st=0:d=…` / `afade=t=out:st=…:d=…` inserted before `adelay`, exactly as planned.
 
-**F11 · Per-clip speed (0.25×–4×)** — B · M
+**F10 · Rotate and flip clip** — B · M — ✅
+- *Schema:* `Clips.turns` (0–3), `flipH`, `flipV` — separate from `rotationDegrees` (the container's own metadata), never combined.
+- *Preview:* new `_RotateFlip` widget (`RotatedBox` + `Transform`, flip applied before rotate).
+- *Export:* `rotateFlipFilters` — flip/rotate inserted before scale/pad; a 180° turn folds into (and XORs with) the flip pair rather than a separate `transpose`, since FFmpeg has no single 180° transpose value.
+- **Bug found and fixed during this pass:** `TrimPanel._split`'s playhead-to-split-point math assumed timeline-ms and source-ms were the same thing, which F11 (speed) breaks — fixed to convert back to source-time before calling `splitClip`. Pre-existing code, newly exposed by F11, not a regression in F10 itself.
+
+**F11 · Per-clip speed** — B · M — ✅, **scoped to 0.5×–2× (not 0.25×–4× as planned)**
 - *Schema:* `Clips.speed`.
-- *Rule:* **rendered duration = (trimEnd − trimStart) / speed.** Add one helper (`effectiveDurationMs`) and use it **everywhere** durations matter: `layoutTimeline`/`positionAt`, `exportClipsFrom`, `_boundaryAfter`, `exportDurationMs`, text/music remapping, the timeline tile width.
+- **Deviation from plan:** range narrowed to 0.5–2.0 so export needs exactly one FFmpeg `atempo` filter — `atempo`'s own valid range is 0.5–2.0, and the planned `atempo=2,atempo=…` chaining for wider ranges was cut for this pass. Expandable later by adding the chaining logic; the schema column itself has no range constraint baked in.
+- *Rule:* `ExportClip.durationMs`/`ClipTiming.trimmedDurationMs` getters now divide by speed — the single place every timeline-length calculation (`layoutTimeline`, `exportClipsFrom`, `_boundaryAfter`, `exportDurationMs`, text/music remap, tile width) reads from, so they're all speed-aware with no further changes needed.
 - *Preview:* `controller.setPlaybackSpeed(speed)`.
-- *Export:* video `setpts=(PTS-STARTPTS)/speed`; audio `atempo` (chain `atempo=2,atempo=…` for values outside 0.5–2); photos ignore speed.
-- *Done when:* tests prove a 4-s clip at 2× renders 2 s and later text/music stay glued to the same picture; slow-motion audio stays in pitch.
-- *Risk:* highest regression risk of the tier — this touches the timeline maths. Run all existing tests.
+- *Export:* video `setpts=(PTS-STARTPTS)/speed`; audio `atempo=speed`; photos always forced to speed 1.0 at the `export_inputs.dart` mapping layer.
 
-**F12 · Subtitle (.srt) import** — A · M
-- *User sees:* "Import subtitles" → pick an .srt → each cue becomes a text overlay at the bottom with its start/end.
-- *Work:* pure parser `lib/models/srt_parser.dart` (+ tests with multi-line cues, comma milliseconds, BOM, empty file), batch insert with one transaction (so undo removes all at once). File picker already a dependency. Files: parser, `project_database.dart` (`insertOverlays`), `text_overlay_panel.dart`.
-- *Export:* none, it reuses text overlays.
-- *Risk:* 300+ cues makes 300 `drawtext` filters; warn above ~100 and test export time.
+**F12 · Subtitle (.srt) import** — A · M — ✅
+- *User sees:* "Import subtitles (.srt)" in the import sheet → pick a file → each cue becomes a text overlay.
+- *Work:* `lib/models/srt_parser.dart` (pure, forgiving — tolerates a BOM, CRLF, a period instead of a comma, a missing index line, and skips individually malformed cues rather than throwing), `ProjectDatabase.insertTextOverlays` (one transaction), wired into `editor_screen.dart`'s `_importSubtitles`.
+- *Export:* none — reuses the existing text-overlay/`drawtext` pipeline untouched.
+- **Not done:** no warning above ~100 cues as the original risk note suggested; large files will just produce a slow export the first time someone hits it.
 
 ### TIER 3 — Medium (real filter-graph work)
 
@@ -237,3 +254,39 @@ F21 ─▶ none, but do after F11 (timeline maths settled)
 - **New tables** are invisible to undo until added to `ProjectSnapshot`/`restoreProject`.
 - **Never edit `*.g.dart`.** Edit tables, run `scripts/dev.sh gen`.
 - **Hardware encoder limits:** the first export attempt uses `h264_mediacodec`; heavy graphs (F15 blur, F24 PiP, F14 zoompan) are likelier to trigger the fallback to the slower `mpeg4`. Time a 30-second export after each of those.
+
+## 7. Beyond the 25
+
+**F29 · Project interchange export (FCPXML) — ✅ implemented**, 2026-11-07.
+Not part of the original 25 — added after cross-checking against a wider
+feature-reference doc. Lets a timeline started on ClipForge finish on a
+desktop NLE (Premiere, DaVinci Resolve, Final Cut) by exporting an FCPXML
+1.10 file: clip order, in/out trims, rotation, one music track, and text
+overlays (as titles) round-trip. `transitionOut` (fade/dissolve) is
+written as a `<note>` on the clip rather than rendered as an overlapping
+FCPXML `<transition>` — overlap geometry differs across NLEs, so a clean
+cut list that imports correctly everywhere beats a transition that
+imports wrong somewhere; add the transition back in the desktop app.
+
+- **Files:** `lib/export/fcpxml_export_service.dart` (pure XML builder +
+  thin file-writing service, same split as
+  `export_command_builder.dart`/`export_service.dart`), wired into
+  `lib/export/export_controller.dart` (`fcpxmlExportServiceProvider`) and
+  `lib/screens/export_screen.dart` (new "Export project file (.fcpxml)"
+  button next to "Export video"). `GalleryShareService.shareFile` added
+  for the non-video share-sheet case.
+- **Tests:** `test/fcpxml_export_test.dart`, 13 cases against the pure
+  builder (no database or platform channels needed). Not run on a device
+  (no Flutter SDK in the build environment this pass) — run
+  `flutter test test/fcpxml_export_test.dart` before shipping.
+- **Known bug fixed during this pass:** the first draft emitted one
+  `<asset>` resource *per clip*, so a split or duplicated clip (which
+  reuses its parent's `sourceUri` — see `splitClip`/`duplicateClip` in
+  `project_database.dart`) produced two `<asset>` elements sharing the
+  same `id`, which is invalid XML. Fixed to dedupe by source path before
+  writing `<asset>` resources; covered by the "two distinct asset
+  resources" test case.
+- **Not done:** no live preview of the exported file's correctness in an
+  actual NLE — verify by opening the output in Resolve/Premiere once a
+  real export exists (see B-03/U-01 below, same blocker as the main
+  video pipeline).

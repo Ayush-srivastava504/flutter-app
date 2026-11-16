@@ -17,6 +17,8 @@ Then: `drawtext` per text overlay → music `atrim/…/adelay` → `amix=inputs=
 Input order: **all clips first, music last** → music is `[<clipCount>:a]`. Any feature that adds an input must change this deliberately and have a test (FEATURE_PLAN §6).
 
 ## 2. Snippets (desktop FFmpeg 6.1.1)
+> ⛔ **Not in the phone build (GPL, verified 2026-11-11 on FFmpeg n8.1.2 / FFmpegKit full non-GPL):** `eq`, `boxblur` — and assume every other GPL filter (`smartblur`, `hqdn3d`, `delogo`, `perspective`, `mpdecimate`…) is missing too. Desktop FFmpeg having a filter proves nothing. Use `colorchannelmixer`+`lutrgb` for colour, `gblur`/`avgblur` for blur.
+
 Legend — Desktop: ✅ ran OK. Phone: ⚠️ not run on a phone / FFmpegKit build.
 
 | Feature | Snippet (video chain unless stated) | Desktop | Phone | Notes |
@@ -29,20 +31,28 @@ Legend — Desktop: ✅ ran OK. Phone: ⚠️ not run on a phone / FFmpegKit bui
 | F10 rotate 90° | `transpose=1` | ✅ | ⚠️ | Insert **before** scale/pad. Container rotation is auto-applied by FFmpeg already (don't double-rotate; builder header comment). |
 | F10 flip | `hflip,vflip` | ✅ | ⚠️ | |
 | F11 speed 2× | video `setpts=(PTS-STARTPTS)/2` + audio `atempo=2` | ✅ | ⚠️ | Rendered length = source length / speed. |
-| F11 speed 4× | video `setpts=(PTS-STARTPTS)/4` + audio `atempo=2,atempo=2` | ✅ | ⚠️ | Chain `atempo` to reach values outside 0.5–2 (tested 0.25× as `atempo=0.5,atempo=0.5` ✅). |
+| F11 speed 4× | video `setpts=(PTS-STARTPTS)/4` + audio `atempo=2,atempo=2` | ✅ | ⚠️ | Chain `atempo` to reach values outside 0.5–2 (tested 0.25× as `atempo=0.5,atempo=0.5` ✅). Shipped 2026-11-11 as `atempoChain` (0.25–4×). |
 | F9 music fades | audio `afade=t=in:st=0:d=0.5,afade=t=out:st=2.5:d=0.5` | ✅ | ⚠️ | Fade-out `st` = trimmed length − fade. Put before `adelay`. |
 | F14 crop/zoom | `crop=iw/2:ih/2:iw/4:ih/4,scale=320:240` | ✅ | ⚠️ | Crop **before** the existing scale/pad. |
 | F14 Ken Burns (photo) | `scale=1280:960,zoompan=z='min(zoom+0.0015,1.5)':d=60:s=320x240:fps=30` | ✅ | ⚠️ | Slow + jittery on small photos; scale source up first; photos only in v1. |
 | F15 fill | `scale=W:H:force_original_aspect_ratio=increase,crop=W:H` | ✅ | ⚠️ | |
-| F15 blurred background | `split[a][b];[a]scale=W:H:force_original_aspect_ratio=increase,crop=W:H,boxblur=20:2[bg];[b]scale=W:H:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2` | ✅ | ⚠️ | Heavy: time it; may push export onto the slow fallback encoder. |
+| F15 blurred background | ⛔ uses `boxblur` (missing on phone) — shipped version uses `gblur=sigma=6` on a W/4×H/4 copy, then `scale=W:H`. Original desktop snippet: `split[a][b];[a]scale=W:H:force_original_aspect_ratio=increase,crop=W:H,boxblur=20:2[bg];[b]scale=W:H:force_original_aspect_ratio=decrease[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2` | ✅ | ⚠️ | Heavy: time it; may push export onto the slow fallback encoder. Shipped 2026-11-11 (fit mode `blur`, also `fill`); the exact per-clip graph in the builder was **not** rendered — no FFmpeg on the dev machine that day. |
 | F16 image overlay | `[2:v]scale=100:-1,format=rgba,colorchannelmixer=aa=0.5[img];[0:v][img]overlay=10:10:enable='between(t,0.5,2)'` | ✅ | ⚠️ | Extra `-i` shifts input indexes. Use `-loop 1` for stills. |
 | F17 reverse | video `reverse` + audio `areverse` | ✅ | ⚠️ | `reverse` buffers the whole clip in RAM → cap source length (plan says 10 s). |
 | F8 text box/outline | `drawtext=…:box=1:boxcolor=black@0.5:boxborderw=8:borderw=2:bordercolor=black` | ✅ | ⚠️ | Tested with the bundled `DejaVuSans.ttf`. |
 | F23 keyframe-style expression | `drawtext=…:x='if(lt(t,1),10,if(lt(t,2),10+(t-1)*100,110))'` | ✅ | ⚠️ | Commas inside the quoted expression are fine when the whole filtergraph is one argument. |
 | F25 chroma key | `chromakey=color=0x00FF00:similarity=0.15:blend=0.1,format=yuva420p` | ✅ | ⚠️ | Looks not judged (synthetic input). |
-| F19 ducking | `[0:a]asplit=2[sc][mix];[1:a][sc]sidechaincompress=threshold=0.05:ratio=8[duck];[duck][mix]amix=inputs=2:normalize=0` | ✅ | ⚠️ | Tested with two sine inputs (a first attempt with a malformed graph of mine failed; this version passed). Threshold/ratio untuned. |
+| F19 ducking | `[0:a]asplit=2[sc][mix];[1:a][sc]sidechaincompress=threshold=0.05:ratio=8[duck];[duck][mix]amix=inputs=2:normalize=0` | ✅ | ⚠️ | Tested with two sine inputs (a first attempt with a malformed graph of mine failed; this version passed). Threshold/ratio untuned. Shipped 2026-11-11 (`Projects.duckMusic`), same values. |
 | F5 60 fps | `fps=60` | ✅ | ⚠️ | Shipped 2026-10-13 as the `fps` parameter of `buildExportCommand` (24/30/60): drives `fps=`, `-r` and the photo `-framerate`. `tools/verify_export_graph.py` rendered 480p@24 and 720p@60 on desktop FFmpeg 6.1.1 (ran 2026-10-13). Hardware encoder at 1080p60 may fail on weak phones → fallback; not tried on a phone. |
-| F13 transitions | `xfade=transition=<name>` for `slideleft`, `wipeleft`, `circleopen`, `zoomin`, `fadeblack`, `dissolve` | ✅ all 6 | ⚠️ | Existing code uses `transition=fade`. Unknown names must fall back to `fade` (never fail the export). |
+| F13 transitions | `xfade=transition=<name>` for `slideleft`, `wipeleft`, `circleopen`, `zoomin`, `fadeblack`, `dissolve` | ✅ all 6 | ⚠️ | Shipped 2026-11-11: `slideleft`, `wipeleft`, `circleopen`, `zoomin` (plus the existing `fade` for cross-dissolve). Unknown names export as a cut (never fail the export). |
+
+### Analysis filters (assistant smart tools, 2026-11-11) — ⚠️ UNTESTED
+Standard FFmpeg filters, used read-only with `-f null -`; **not** run on desktop or phone. Parsers are unit-tested against hand-written log lines only — confirm the real log format before relying on them.
+| Tool | Args (after `-ss <start> -t <len> -i <file>`) | Desktop | Phone |
+|---|---|---|---|
+| Remove silences | `-vn -af silencedetect=noise=-35dB:d=0.500` | ⚠️ not run | ⚠️ |
+| Split scenes | `-an -vf select='gt(scene,0.35)',showinfo` | ⚠️ not run | ⚠️ |
+| Balance loudness | `-vn -af volumedetect` | ⚠️ not run | ⚠️ |
 
 ## 3. Known export limits (from code, FACTS §6)
 - Text alignment is ignored in export (always centred on `positionX`).
