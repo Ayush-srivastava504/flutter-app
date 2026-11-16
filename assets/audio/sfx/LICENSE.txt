@@ -1,0 +1,14 @@
+ClipForge audio library (assets/audio/library/*.m4a and assets/audio/sfx/*.m4a)
+
+Every track and sound effect in these two folders was synthesised from scratch by
+tools/make_audio_library.py (oscillators, plucked-string physics, noise drums and
+reverb written in that script). No samples, loops, presets or third-party recordings
+were used, so there is no outside copyright or licence attached.
+
+The project owner dedicates these files to the public domain under CC0 1.0
+(https://creativecommons.org/publicdomain/zero/1.0/): anyone may use them for any
+purpose, including monetised YouTube / Instagram videos, without attribution.
+None of them is registered with YouTube Content ID or any similar system.
+
+(The three older loops in assets/audio/*.wav are NOT covered by this note — see
+docs/FACTS.md F-81.)
