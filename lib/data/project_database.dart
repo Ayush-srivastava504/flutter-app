@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/media_kind.dart' show isPhotoPath;
+
 part 'project_database.g.dart';
 
 const _uuid = Uuid();
@@ -18,6 +20,14 @@ class Projects extends Table {
   RealColumn get aspectRatio => real().withDefault(const Constant(9 / 16))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
+
+  /// F19: when true, export lowers the music while clip audio is audible
+  /// (FFmpeg `sidechaincompress`). Export-only — the preview does not duck.
+  BoolColumn get duckMusic => boolean().withDefault(const Constant(false))();
+
+  /// v10: which editor mode the project was started in (`EditMode.name`:
+  /// youtube | insta | normal). Rows from before v10 read as 'normal'.
+  TextColumn get mode => text().withDefault(const Constant('normal'))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -67,6 +77,53 @@ class Clips extends Table {
   /// `AudioTrackPanel`'s sliders behave the same way.
   RealColumn get volume => real().withDefault(const Constant(1.0))();
 
+  /// F7: which stylized look (see `models/look_x.dart`'s `lookPresets`)
+  /// is layered on top of the brightness/contrast/saturation sliders
+  /// above, or null for none. Unlike [filterPreset] (a shortcut for the
+  /// three numeric sliders), a look's math — colorchannelmixer, a
+  /// vignette — isn't expressible as brightness/contrast/saturation, so
+  /// it needs its own column rather than reusing [filterPreset].
+  TextColumn get look => text().nullable()();
+
+  /// F10: quarter-turns clockwise (0–3) applied on top of
+  /// [rotationDegrees] (the container-level rotation already baked into
+  /// the source file). A user-requested rotate, not a re-probe of the
+  /// file.
+  IntColumn get turns => integer().withDefault(const Constant(0))();
+  BoolColumn get flipH => boolean().withDefault(const Constant(false))();
+  BoolColumn get flipV => boolean().withDefault(const Constant(false))();
+
+  /// F11: constant per-clip playback speed, 0.5–2.0 (1.0 = unchanged).
+  /// Scoped to this range so export needs exactly one FFmpeg `atempo`
+  /// filter for the audio path — `atempo`'s own valid range is 0.5–2.0,
+  /// and chaining several to cover a wider range is deliberately out of
+  /// scope for this pass (see `export_command_builder.dart`). Ramped
+  /// (mid-clip) speed changes are out of scope too — this is constant
+  /// speed for the whole clip, same "v1 scope" call the original F11
+  /// plan already made. Ignored for photo clips (nothing to speed up).
+  RealColumn get speed => real().withDefault(const Constant(1.0))();
+
+  /// F15: how a clip whose shape differs from the project's fills the
+  /// frame — 'fit' (letterbox, the pre-F15 behaviour), 'fill' (crop to
+  /// cover) or 'blur' (fit over a blurred, cropped copy of itself). See
+  /// `models/fit_mode_x.dart`.
+  TextColumn get fitMode => text().withDefault(const Constant('fit'))();
+
+  /// How strongly [look] is applied, 0..1 (1 = the look as designed).
+  RealColumn get lookStrength => real().withDefault(const Constant(1.0))();
+
+  /// v11: one effect from `models/effect_x.dart` (motion or stylise), or
+  /// null for none, and how strongly it applies (0..1).
+  TextColumn get effect => text().nullable()();
+  RealColumn get effectStrength => real().withDefault(const Constant(1.0))();
+
+  /// v11: export cleans this clip's voice (denoise, EQ, compression).
+  /// Export-only — the preview plays the original sound.
+  BoolColumn get enhanceSpeech => boolean().withDefault(const Constant(false))();
+
+  /// v12: background removal (`models/chroma_key.dart` JSON), or null.
+  TextColumn get keyJson => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -86,6 +143,17 @@ class AudioTracks extends Table {
   IntColumn get trimEndMs => integer()();
   IntColumn get offsetMs => integer().withDefault(const Constant(0))();
   RealColumn get volume => real().withDefault(const Constant(1.0))();
+
+  /// F9: fade the music in/out at its own start/end (i.e. within the
+  /// trimmed window above, not the timeline) — 0 means no fade, same
+  /// "0 is the neutral default" convention every other optional column
+  /// here uses. Applied at export via FFmpeg `afade`; the preview
+  /// approximates it with a volume ramp (see `VideoPreviewPlayer`) since
+  /// `just_audio` has no frame-accurate fade filter — export is the
+  /// exact version, same relationship F15/F19 already have between
+  /// preview and export elsewhere in this app.
+  IntColumn get fadeInMs => integer().withDefault(const Constant(0))();
+  IntColumn get fadeOutMs => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -117,6 +185,23 @@ class TextOverlays extends Table {
   /// converter for a 3-value int, so keep it plain.
   IntColumn get alignment => integer().withDefault(const Constant(1))();
 
+  /// F8 (text styling v2): bold weight, a background box, and an
+  /// outline/stroke — on top of the font/size/color/alignment above.
+  /// [boxColorValue] and [outlineColorValue] are independent of
+  /// [colorValue] (the text fill) so e.g. white text can sit on a black
+  /// box without the two colors being forced to match.
+  BoolColumn get bold => boolean().withDefault(const Constant(false))();
+  BoolColumn get boxEnabled => boolean().withDefault(const Constant(false))();
+  IntColumn get boxColorValue =>
+      integer().withDefault(const Constant(0x99000000))();
+
+  /// Outline width in the same logical-px space [fontSize] uses; 0 means
+  /// no outline (the pre-F8 behavior — every overlay before this column
+  /// existed effectively had width 0).
+  RealColumn get outlineWidth => real().withDefault(const Constant(0))();
+  IntColumn get outlineColorValue =>
+      integer().withDefault(const Constant(0xFF000000))();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -127,20 +212,84 @@ class ProjectSnapshot {
   final List<Clip> clips;
   final List<AudioTrack> audioTracks;
   final List<TextOverlay> overlays;
-  const ProjectSnapshot(this.clips, this.audioTracks, this.overlays);
+  final List<VoiceOver> voiceOvers;
+  const ProjectSnapshot(this.clips, this.audioTracks, this.overlays, [this.voiceOvers = const []]);
 
   @override
   bool operator ==(Object other) =>
       other is ProjectSnapshot &&
       listEquals(clips, other.clips) &&
       listEquals(audioTracks, other.audioTracks) &&
-      listEquals(overlays, other.overlays);
+      listEquals(overlays, other.overlays) &&
+      listEquals(voiceOvers, other.voiceOvers);
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(clips), Object.hashAll(audioTracks), Object.hashAll(overlays));
+  int get hashCode => Object.hash(
+      Object.hashAll(clips), Object.hashAll(audioTracks), Object.hashAll(overlays), Object.hashAll(voiceOvers));
 }
 
-@DriftDatabase(tables: [Projects, Clips, AudioTracks, TextOverlays])
+/// v11: narration recorded in the app (or any audio file) placed on the
+/// timeline at [startMs]. Several per project; mixed under the clips'
+/// sound in the export, before music ducking, so ducking also dips the
+/// music under narration.
+class VoiceOvers extends Table {
+  TextColumn get id => text()();
+  TextColumn get projectId => text().references(Projects, #id)();
+  TextColumn get sourceUri => text()();
+
+  /// Timeline position where it starts.
+  IntColumn get startMs => integer()();
+  IntColumn get durationMs => integer()();
+  RealColumn get volume => real().withDefault(const Constant(1.0))();
+
+  /// Same voice clean-up as `Clips.enhanceSpeech`; on by default.
+  BoolColumn get enhance => boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// v13 Audio Studio: one row per audio edit or composition. The edit
+/// (`lib/audio/audio_edit.dart`) and the composition (`lib/audio/composer.dart`)
+/// are JSON documents; undo/redo lives in the audio screens, like photos.
+class AudioProjects extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+
+  /// The audio being edited (an imported copy, a recording, or a rendered
+  /// composition). Null for a composition that hasn't been rendered yet.
+  TextColumn get sourceUri => text().nullable()();
+  IntColumn get durationMs => integer().withDefault(const Constant(0))();
+  TextColumn get editJson => text().withDefault(const Constant(''))();
+  TextColumn get composeJson => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Photo Studio (MASTER_PLAN Phase 1): one row per edited photo. The edit
+/// itself is a versioned JSON document (`lib/photo/photo_edit.dart`), so
+/// new tools don't need schema changes. Undo/redo for photos lives in the
+/// photo editor, not in `ProjectSnapshot` (that covers video projects).
+class PhotoProjects extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+
+  /// The imported copy in app storage (never modified).
+  TextColumn get sourceUri => text()();
+  IntColumn get width => integer().withDefault(const Constant(0))();
+  IntColumn get height => integer().withDefault(const Constant(0))();
+  TextColumn get editJson => text().withDefault(const Constant(''))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [Projects, Clips, AudioTracks, TextOverlays, PhotoProjects, VoiceOvers, AudioProjects])
 class ProjectDatabase extends _$ProjectDatabase {
   ProjectDatabase() : super(_openConnection());
 
@@ -154,7 +303,7 @@ class ProjectDatabase extends _$ProjectDatabase {
   ProjectDatabase.forTesting(QueryExecutor executor) : super(executor);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -192,12 +341,96 @@ class ProjectDatabase extends _$ProjectDatabase {
             // preset), same as every clip's actual 0/0/0 default.
             await m.addColumn(clips, clips.filterPreset);
           }
+          if (from < 6) {
+            // Tier 2 batch (F7 look, F8 text styling v2, F9 music
+            // fades, F10 rotate/flip, F11 speed): every new column
+            // defaults to its existing-row-safe neutral value (null
+            // look, no rotation/flip, 1.0x speed, no box/outline, no
+            // fade), so upgrading installs see no visible change to
+            // anything already on their timeline until they touch one
+            // of these controls.
+            await m.addColumn(clips, clips.look);
+            await m.addColumn(clips, clips.turns);
+            await m.addColumn(clips, clips.flipH);
+            await m.addColumn(clips, clips.flipV);
+            await m.addColumn(clips, clips.speed);
+            // Installs older than v4 just got `textOverlays` from
+            // `createTable` above, which already uses today's full column
+            // set — adding these again would fail with "duplicate column".
+            if (from >= 4) {
+              await m.addColumn(textOverlays, textOverlays.bold);
+              await m.addColumn(textOverlays, textOverlays.boxEnabled);
+              await m.addColumn(textOverlays, textOverlays.boxColorValue);
+              await m.addColumn(textOverlays, textOverlays.outlineWidth);
+              await m.addColumn(textOverlays, textOverlays.outlineColorValue);
+            }
+            await m.addColumn(audioTracks, audioTracks.fadeInMs);
+            await m.addColumn(audioTracks, audioTracks.fadeOutMs);
+          }
+          if (from < 7) {
+            // F15 fit mode + F19 music ducking. Both default to the
+            // pre-existing behaviour ('fit', no ducking).
+            await m.addColumn(clips, clips.fitMode);
+            await m.addColumn(projects, projects.duckMusic);
+          }
+          if (from < 8) {
+            // Look strength slider (defaults to the full look, as before).
+            await m.addColumn(clips, clips.lookStrength);
+          }
+          if (from < 9) {
+            // Photo Studio.
+            await m.createTable(photoProjects);
+          }
+          if (from < 10) {
+            // Editor modes (YouTube Studio / Insta Clip / Quick Edit).
+            await m.addColumn(projects, projects.mode);
+          }
+          if (from < 11) {
+            // Effects, speech enhancement, voice-over.
+            await m.addColumn(clips, clips.effect);
+            await m.addColumn(clips, clips.effectStrength);
+            await m.addColumn(clips, clips.enhanceSpeech);
+            await m.createTable(voiceOvers);
+          }
+          if (from < 12) {
+            // Background removal.
+            await m.addColumn(clips, clips.keyJson);
+          }
+          if (from < 13) {
+            // Audio Studio.
+            await m.createTable(audioProjects);
+          }
         },
       );
 
   // --- Query helpers -------------------------------------------------
 
   Future<List<Project>> allProjects() => select(projects).get();
+
+  // --- Photo Studio ---------------------------------------------------------
+
+  Stream<List<PhotoProject>> watchPhotoProjects() =>
+      (select(photoProjects)..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])).watch();
+
+  Stream<PhotoProject?> watchPhotoProject(String id) =>
+      (select(photoProjects)..where((t) => t.id.equals(id))).watchSingleOrNull();
+
+  Future<PhotoProject?> getPhotoProject(String id) =>
+      (select(photoProjects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<void> insertPhotoProject(PhotoProjectsCompanion row) => into(photoProjects).insert(row);
+
+  Future<void> savePhotoEdit(String id, String editJson) =>
+      (update(photoProjects)..where((t) => t.id.equals(id))).write(
+        PhotoProjectsCompanion(editJson: Value(editJson), updatedAt: Value(DateTime.now())),
+      );
+
+  Future<void> renamePhotoProject(String id, String name) =>
+      (update(photoProjects)..where((t) => t.id.equals(id))).write(
+        PhotoProjectsCompanion(name: Value(name), updatedAt: Value(DateTime.now())),
+      );
+
+  Future<void> deletePhotoProject(String id) => (delete(photoProjects)..where((t) => t.id.equals(id))).go();
 
   /// Every clip in every project, regardless of `projectId` — unlike
   /// [watchClips], which is scoped to one project's timeline. Used by
@@ -212,6 +445,23 @@ class ProjectDatabase extends _$ProjectDatabase {
 
   Future<Project?> getProject(String id) =>
       (select(projects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Stream<Project?> watchProject(String id) =>
+      (select(projects)..where((t) => t.id.equals(id))).watchSingleOrNull();
+
+  /// F6: changes the project's frame shape (width / height). Not part of
+  /// the undo snapshot — `ProjectSnapshot` covers clips/audio/text only.
+  Future<void> setAspectRatio(String id, double aspectRatio) =>
+      (update(projects)..where((t) => t.id.equals(id))).write(
+        ProjectsCompanion(aspectRatio: Value(aspectRatio), updatedAt: Value(DateTime.now())),
+      );
+
+  /// F19: turns music ducking on/off (export-only). Not in undo, like
+  /// [setAspectRatio].
+  Future<void> setDuckMusic(String id, bool duck) =>
+      (update(projects)..where((t) => t.id.equals(id))).write(
+        ProjectsCompanion(duckMusic: Value(duck), updatedAt: Value(DateTime.now())),
+      );
 
   /// Autosave stamp: edits are written to SQLite as they happen, so "saving"
   /// is just recording when the project last changed.
@@ -230,7 +480,11 @@ class ProjectDatabase extends _$ProjectDatabase {
           ..where((t) => t.projectId.equals(projectId))
           ..orderBy([(t) => OrderingTerm.asc(t.startMs), (t) => OrderingTerm.asc(t.id)]))
         .get();
-    return ProjectSnapshot(c, a, o);
+    final v = await (select(voiceOvers)
+          ..where((t) => t.projectId.equals(projectId))
+          ..orderBy([(t) => OrderingTerm.asc(t.startMs), (t) => OrderingTerm.asc(t.id)]))
+        .get();
+    return ProjectSnapshot(c, a, o, v);
   }
 
   /// Replaces the project's clips/audio/overlays with [s] in one transaction,
@@ -239,6 +493,10 @@ class ProjectDatabase extends _$ProjectDatabase {
         await (delete(clips)..where((t) => t.projectId.equals(projectId))).go();
         await (delete(audioTracks)..where((t) => t.projectId.equals(projectId))).go();
         await (delete(textOverlays)..where((t) => t.projectId.equals(projectId))).go();
+        await (delete(voiceOvers)..where((t) => t.projectId.equals(projectId))).go();
+        for (final v in s.voiceOvers) {
+          await into(voiceOvers).insert(v.toCompanion(false));
+        }
         for (final c in s.clips) {
           await into(clips).insert(c.toCompanion(false));
         }
@@ -249,6 +507,74 @@ class ProjectDatabase extends _$ProjectDatabase {
           await into(textOverlays).insert(o.toCompanion(false));
         }
       });
+
+  /// First-clip thumbnail per project (for the Home grid), keyed by project id.
+  Future<Map<String, String>> projectCoverThumbnails() async {
+    final rows = await (select(clips)..where((c) => c.orderIndex.equals(0))).get();
+    // A photo clip has no generated thumbnail; the photo itself is the cover.
+    return {
+      for (final c in rows)
+        if ((c.thumbnailUri ?? (isPhotoPath(c.sourceUri) ? c.sourceUri : null)) case final String uri)
+          c.projectId: uri,
+    };
+  }
+
+  // --- Audio Studio (v13) -------------------------------------------------
+
+  Stream<List<AudioProject>> watchAudioProjects() =>
+      (select(audioProjects)..orderBy([(t) => OrderingTerm.desc(t.updatedAt)])).watch();
+
+  Future<AudioProject?> getAudioProject(String id) =>
+      (select(audioProjects)..where((t) => t.id.equals(id))).getSingleOrNull();
+
+  Future<void> insertAudioProject(AudioProjectsCompanion row) => into(audioProjects).insert(row);
+
+  Future<void> updateAudioProject(String id, AudioProjectsCompanion changes) =>
+      (update(audioProjects)..where((t) => t.id.equals(id)))
+          .write(changes.copyWith(updatedAt: Value(DateTime.now())));
+
+  Future<void> deleteAudioProject(String id) => (delete(audioProjects)..where((t) => t.id.equals(id))).go();
+
+  // --- Voice-over (v11) ----------------------------------------------------
+
+  Stream<List<VoiceOver>> watchVoiceOvers(String projectId) => (select(voiceOvers)
+        ..where((t) => t.projectId.equals(projectId))
+        ..orderBy([(t) => OrderingTerm.asc(t.startMs)]))
+      .watch();
+
+  Future<List<VoiceOver>> getVoiceOvers(String projectId) => (select(voiceOvers)
+        ..where((t) => t.projectId.equals(projectId))
+        ..orderBy([(t) => OrderingTerm.asc(t.startMs)]))
+      .get();
+
+  Future<void> insertVoiceOver(VoiceOversCompanion row) => into(voiceOvers).insert(row);
+
+  Future<bool> updateVoiceOver(VoiceOver row) => update(voiceOvers).replace(row);
+
+  Future<int> deleteVoiceOver(String id) => (delete(voiceOvers)..where((t) => t.id.equals(id))).go();
+
+  /// Same look (and strength) on every clip of a project.
+  Future<void> applyLookToAllClips(String projectId, String? look, double strength) =>
+      (update(clips)..where((t) => t.projectId.equals(projectId)))
+          .write(ClipsCompanion(look: Value(look), lookStrength: Value(strength)));
+
+  /// Same effect (and strength) on every clip of a project.
+  Future<void> applyEffectToAllClips(String projectId, String? effect, double strength) =>
+      (update(clips)..where((t) => t.projectId.equals(projectId)))
+          .write(ClipsCompanion(effect: Value(effect), effectStrength: Value(strength)));
+
+  /// AutoCut: replaces the project's whole timeline with [rows] (already
+  /// numbered by `orderIndex`) in one transaction — one undo step.
+  Future<void> replaceProjectClips(String projectId, List<Clip> rows) => transaction(() async {
+        await (delete(clips)..where((t) => t.projectId.equals(projectId))).go();
+        for (final r in rows) {
+          await into(clips).insert(r.toCompanion(false));
+        }
+      });
+
+  /// Speech clean-up for every clip of a project at once.
+  Future<void> setEnhanceSpeechForAll(String projectId, bool on) =>
+      (update(clips)..where((t) => t.projectId.equals(projectId))).write(ClipsCompanion(enhanceSpeech: Value(on)));
 
   Future<int> insertProject(ProjectsCompanion project) =>
       into(projects).insert(project);
@@ -273,6 +599,7 @@ class ProjectDatabase extends _$ProjectDatabase {
         await (delete(clips)..where((t) => t.projectId.equals(id))).go();
         await (delete(audioTracks)..where((t) => t.projectId.equals(id))).go();
         await (delete(textOverlays)..where((t) => t.projectId.equals(id))).go();
+        await (delete(voiceOvers)..where((t) => t.projectId.equals(id))).go();
         await (delete(projects)..where((t) => t.id.equals(id))).go();
       });
 
@@ -300,6 +627,8 @@ class ProjectDatabase extends _$ProjectDatabase {
         id: newId,
         name: '${original.name} (copy)',
         aspectRatio: Value(original.aspectRatio),
+        duckMusic: Value(original.duckMusic),
+        mode: Value(original.mode),
         createdAt: now,
         updatedAt: now,
       ));
@@ -316,6 +645,11 @@ class ProjectDatabase extends _$ProjectDatabase {
       for (final o in snapshot.overlays) {
         await into(textOverlays).insert(
           o.copyWith(id: _uuid.v4(), projectId: newId).toCompanion(false),
+        );
+      }
+      for (final v in snapshot.voiceOvers) {
+        await into(voiceOvers).insert(
+          v.copyWith(id: _uuid.v4(), projectId: newId).toCompanion(false),
         );
       }
     });
@@ -481,9 +815,118 @@ class ProjectDatabase extends _$ProjectDatabase {
         // reset to volume 1.0 and lost its look/filter preset.
         volume: Value(original.volume),
         filterPreset: Value(original.filterPreset),
+        // Same B-01 rationale for the Tier-2 columns (F7/F10/F11): without
+        // these, splitting a rotated/flipped/sped-up/look-applied clip
+        // would silently reset the second half to upright/1x/no-look.
+        look: Value(original.look),
+        turns: Value(original.turns),
+        flipH: Value(original.flipH),
+        flipV: Value(original.flipV),
+        speed: Value(original.speed),
+        fitMode: Value(original.fitMode),
+        lookStrength: Value(original.lookStrength),
+        effect: Value(original.effect),
+        effectStrength: Value(original.effectStrength),
+        enhanceSpeech: Value(original.enhanceSpeech),
+        keyJson: Value(original.keyJson),
       ));
     });
   }
+
+  /// Replaces [clipId] with one clip per entry of [segments] — each a
+  /// `(startMs, endMs)` range in *source* time — keeping their order. Used
+  /// by the smart tools ("remove silences" keeps the non-silent ranges,
+  /// "split at scene changes" keeps contiguous ranges).
+  ///
+  /// The original row keeps its id and becomes the first segment; the rest
+  /// are copies inserted right after it. Only the last segment keeps the
+  /// original's outgoing transition (the others cut into their own next
+  /// part, same rule as [splitClip]). Segments are clamped to the clip's
+  /// current trim window; empty or out-of-range ones are dropped. No-op
+  /// (returns an empty list) if nothing valid remains.
+  ///
+  /// Returns the ids of the resulting clips in timeline order.
+  Future<List<String>> replaceClipWithSegments(
+    String clipId,
+    List<(int, int)> segments, {
+    String Function()? newId,
+  }) {
+    return transaction(() async {
+      final original = await getClip(clipId);
+      if (original == null) return <String>[];
+
+      final valid = <(int, int)>[];
+      for (final (s, e) in segments) {
+        final start = s.clamp(original.trimStartMs, original.trimEndMs).toInt();
+        final end = e.clamp(original.trimStartMs, original.trimEndMs).toInt();
+        if (end > start) valid.add((start, end));
+      }
+      if (valid.isEmpty) return <String>[];
+
+      final extra = valid.length - 1;
+      if (extra > 0) {
+        final laterClips = await (select(clips)
+              ..where((c) =>
+                  c.projectId.equals(original.projectId) &
+                  c.orderIndex.isBiggerThanValue(original.orderIndex)))
+            .get();
+        for (final later in laterClips) {
+          await (update(clips)..where((c) => c.id.equals(later.id)))
+              .write(ClipsCompanion(orderIndex: Value(later.orderIndex + extra)));
+        }
+      }
+
+      final ids = <String>[];
+      for (var i = 0; i < valid.length; i++) {
+        final (start, end) = valid[i];
+        final isLast = i == valid.length - 1;
+        final transition = isLast ? original.transitionOut : 'cut';
+        if (i == 0) {
+          await (update(clips)..where((c) => c.id.equals(clipId))).write(
+            ClipsCompanion(
+              trimStartMs: Value(start),
+              trimEndMs: Value(end),
+              transitionOut: Value(transition),
+            ),
+          );
+          ids.add(clipId);
+        } else {
+          final id = newId?.call() ?? _uuid.v4();
+          await into(clips).insert(
+            original
+                .copyWith(
+                  id: id,
+                  orderIndex: original.orderIndex + i,
+                  trimStartMs: start,
+                  trimEndMs: end,
+                  transitionOut: transition,
+                )
+                .toCompanion(false),
+          );
+          ids.add(id);
+        }
+      }
+      return ids;
+    });
+  }
+
+  /// F3: sets how long a photo clip stays on screen. A photo has no source
+  /// duration, so `durationMs` and `trimEndMs` move together and the trim
+  /// start stays 0.
+  Future<void> setPhotoDuration(String clipId, int durationMs) =>
+      (update(clips)..where((c) => c.id.equals(clipId))).write(
+        ClipsCompanion(
+          trimStartMs: const Value(0),
+          trimEndMs: Value(durationMs),
+          durationMs: Value(durationMs),
+        ),
+      );
+
+  /// Sets the same outgoing transition on every clip of [projectId] in one
+  /// transaction (one undo step).
+  Future<void> applyTransitionToAllClips(String projectId, String transition) =>
+      (update(clips)..where((c) => c.projectId.equals(projectId)))
+          .write(ClipsCompanion(transitionOut: Value(transition)));
 
   /// F2: inserts a copy of [clipId] immediately after it (orderIndex + 1)
   /// and shifts every later clip down by one, so orderIndex stays
@@ -598,6 +1041,16 @@ class ProjectDatabase extends _$ProjectDatabase {
 
   Future<int> insertTextOverlay(TextOverlaysCompanion overlay) =>
       into(textOverlays).insert(overlay);
+
+  /// F12: inserts every parsed subtitle cue as its own `TextOverlay` in
+  /// one transaction, so a large `.srt` file either lands entirely or
+  /// (on an error partway through) not at all — never half-imported.
+  Future<void> insertTextOverlays(List<TextOverlaysCompanion> overlays) =>
+      transaction(() async {
+        for (final o in overlays) {
+          await into(textOverlays).insert(o);
+        }
+      });
 
   /// Accepts either a `TextOverlay` (e.g. from `.copyWith`) or a raw
   /// `TextOverlaysCompanion` — same pattern as `updateClip`/
