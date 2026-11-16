@@ -55,3 +55,11 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
+
+// Firebase is optional: without android/app/google-services.json the app
+// builds and runs with analytics/crash reports off (Analytics.available ==
+// false). Drop the file from the Firebase console in to switch them on.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+}
