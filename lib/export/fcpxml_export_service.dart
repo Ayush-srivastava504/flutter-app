@@ -203,7 +203,7 @@ String buildFcpxml({
     final rotate =
         c.rotationDegrees != 0 ? '<adjust-transform rotation="${-c.rotationDegrees}"/>' : '';
     final note = c.transitionOut != 'cut'
-        ? '<note>Outgoing transition in ClipForge: ${_escape(c.transitionOut)} '
+        ? '<note>Outgoing transition in Cliper: ${_escape(c.transitionOut)} '
             '(not rendered here — add it in your NLE)</note>'
         : '';
     buffer.writeln(
@@ -294,7 +294,7 @@ class FcpxmlExportService {
 
     final dir = await _tempDir();
     final safeName = project.name.replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '_').trim();
-    final file = File(p.join(dir.path, '${safeName.isEmpty ? 'ClipForge' : safeName}.fcpxml'));
+    final file = File(p.join(dir.path, '${safeName.isEmpty ? 'Cliper' : safeName}.fcpxml'));
     await file.writeAsString(xml);
     return file.path;
   }

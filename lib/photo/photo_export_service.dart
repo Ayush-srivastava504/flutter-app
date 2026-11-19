@@ -81,12 +81,12 @@ class PhotoExportService {
     final dir = Directory(p.join((await getTemporaryDirectory()).path, 'photo_export'));
     await dir.create(recursive: true);
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final png = File(p.join(dir.path, 'ClipForge_$stamp.png'));
+    final png = File(p.join(dir.path, 'Cliper_$stamp.png'));
     await png.writeAsBytes(bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes), flush: true);
 
     var out = png.path;
     if (format != PhotoFormat.png) {
-      out = p.join(dir.path, 'ClipForge_$stamp.${format.extension}');
+      out = p.join(dir.path, 'Cliper_$stamp.${format.extension}');
       final r = await engine.run(photoConvertArgs(png.path, out, format), onTimeMs: (_) {});
       if (!r.success || !await File(out).exists()) {
         debugPrint('[photo-export] convert failed\n${r.log}');
@@ -97,9 +97,9 @@ class PhotoExportService {
 
     try {
       if (!await Gal.hasAccess(toAlbum: true) && !await Gal.requestAccess(toAlbum: true)) {
-        throw const PhotoExportException('ClipForge needs permission to save to your gallery.');
+        throw const PhotoExportException('Cliper needs permission to save to your gallery.');
       }
-      await Gal.putImage(out, album: 'ClipForge');
+      await Gal.putImage(out, album: 'Cliper');
     } on GalException catch (e) {
       throw PhotoExportException('Couldn\'t save to the gallery.', detail: e.toString());
     }

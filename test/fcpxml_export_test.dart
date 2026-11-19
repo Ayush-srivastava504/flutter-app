@@ -83,7 +83,7 @@ void main() {
       aspectRatio: 9 / 16,
       clips: [clip('/a/one.mp4', 0, 1000, t: 'dissolve')],
     );
-    expect(xml, contains('<note>Outgoing transition in ClipForge: dissolve'));
+    expect(xml, contains('<note>Outgoing transition in Cliper: dissolve'));
     // still a plain sequential asset-clip, no <transition> element:
     expect(xml.contains('<transition'), isFalse);
   });
@@ -163,9 +163,9 @@ void main() {
     final xml = buildFcpxml(
       projectName: 'P',
       aspectRatio: 9 / 16,
-      clips: [clip('/storage/emulated/0/ClipForge/one.mp4', 0, 1000)],
+      clips: [clip('/storage/emulated/0/Cliper/one.mp4', 0, 1000)],
     );
-    expect(xml, contains('src="file:///storage/emulated/0/ClipForge/one.mp4"'));
+    expect(xml, contains('src="file:///storage/emulated/0/Cliper/one.mp4"'));
   });
 
   test('portrait aspect ratio yields a taller-than-wide format, matching exportDimensions', () {

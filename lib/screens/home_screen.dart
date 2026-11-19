@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File, Platform;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -19,12 +20,14 @@ import '../services/permission_service.dart';
 import '../models/video_template.dart';
 import '../services/analytics_service.dart';
 import '../services/sample_project_service.dart';
+import '../services/ads_service.dart';
 import '../services/template_service.dart';
 import '../widgets/audio_projects_row.dart';
 import '../widgets/audio_studio_start.dart';
 import '../widgets/brand/clipforge_logo.dart';
 import '../widgets/common/state_views.dart';
 import '../widgets/common/ui_kit.dart';
+import '../widgets/home_banner_ad.dart';
 import '../widgets/templates_section.dart';
 
 /// Everything Home lists, loaded together so the screen settles in one frame.
@@ -70,8 +73,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Android/iOS — skip on desktop/web so those platforms don't
     // crash on startup; they don't need a runtime prompt anyway.
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        PermissionService.requestMediaPermissions();
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          await PermissionService.requestMediaPermissions();
+        } finally {
+          // After the permission dialog, so the two prompts never overlap:
+          // the ad-consent form (if required here), then the ads SDK.
+          unawaited(Ads.instance.init());
+        }
       });
     }
   }
@@ -287,6 +296,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      bottomNavigationBar: const HomeBannerAd(),
       body: SafeArea(
         bottom: false,
         child: FutureBuilder<_HomeData>(

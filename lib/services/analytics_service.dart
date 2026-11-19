@@ -1,4 +1,4 @@
-import 'dart:ui' show PlatformDispatcher;
+import 'dart:async';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -20,6 +20,11 @@ class Analytics {
 
   bool available = false;
   bool _enabled = true;
+  final Completer<bool> _ready = Completer<bool>();
+
+  /// Completes once [init] has tried Firebase: true when it is configured.
+  /// Accounts (`AccountService`) wait on this before touching Firebase Auth.
+  Future<bool> get ready => _ready.future;
 
   Future<void> init({required bool enabled}) async {
     _enabled = enabled;
@@ -29,8 +34,10 @@ class Analytics {
     } catch (e) {
       debugPrint('[analytics] off — Firebase not configured ($e)');
       available = false;
+      if (!_ready.isCompleted) _ready.complete(false);
       return;
     }
+    if (!_ready.isCompleted) _ready.complete(true);
     await setEnabled(enabled);
     final previous = FlutterError.onError;
     FlutterError.onError = (details) {

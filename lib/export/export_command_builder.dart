@@ -443,6 +443,14 @@ ExportCommand buildExportCommand({
     // below sees the frame in its final (already-reoriented) shape.
     v.addAll(rotateFlipFilters(flipH: c.flipH, flipV: c.flipV, turns: c.turns));
     v.add('fps=$fps');
+    if (!c.isPhoto) {
+      // Exactly `d` long. `trim` keeps the last frame's original duration,
+      // so on variable-frame-rate phone video (low light: 82 frames in
+      // 4.35 s) a long final frame made `fps` run past the trim point and
+      // pushed every later cut off — and a stream that ends early is padded
+      // with its last frame (Galaxy A36 camera files, 2026-11-18).
+      v.addAll(['tpad=stop_mode=clone:stop_duration=${_sec(d)}', 'trim=end=${_sec(d)}']);
+    }
     // F15: how the clip fills the output frame. `blur` needs two branches
     // (blurred cover + fitted foreground), so it closes the current chain
     // into labelled pads and the rest of this clip's filters continue from
@@ -561,6 +569,13 @@ ExportCommand buildExportCommand({
         'aformat=sample_fmts=fltp:channel_layouts=stereo',
         'volume=${vol.toStringAsFixed(3)}',
         if (c.enhanceSpeech) ...speechEnhanceFilters,
+        // Exactly as long as this clip's video: phone recordings often
+        // have an audio track a little shorter than the picture, and the
+        // shortfall used to add up across clips, so sound drifted ahead
+        // and ended early (Galaxy A36 camera files, 2026-11-18).
+        'apad',
+        'atrim=0:${_sec(d)}',
+        'asetpts=PTS-STARTPTS',
       ];
       src = '[$i:a]';
     } else {

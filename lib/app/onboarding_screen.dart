@@ -158,7 +158,7 @@ class _WelcomePage extends StatelessWidget {
               Text('Make videos\nthat keep going.', style: theme.textTheme.headlineMedium?.copyWith(height: 1.1)),
               const SizedBox(height: 14),
               Text(
-                'ClipForge is a full video, photo and audio studio that lives on your phone. '
+                'Cliper is a full video, photo and audio studio that lives on your phone. '
                 'No account, no watermark, and it works without internet.',
                 style: theme.textTheme.bodyLarge?.copyWith(color: AppColors.textDim, height: 1.45),
               ),

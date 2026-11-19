@@ -2,7 +2,7 @@
 
 ClipForge is a CapCut-style **Flutter mobile video editor** (Android first; package `com.ayushstudio.clipforge`).
 Projects live in a local SQLite database (Drift); export is one FFmpeg command run through FFmpegKit.
-The app is **offline** (no network code, no analytics, no ads — see `docs/FACTS.md` F-30..F-32).
+Editing is fully **on-device** (projects and media never leave the phone). Network use (2026-11-17): optional Firebase Analytics/Crashlytics and Google sign-in, AdMob ads behind UMP consent, AI generation with the user's own key — see `docs/FACTS.md` F-30..F-32.
 
 ## 0. Session protocol (do this before writing code)
 1. Read this file, then `docs/FACTS.md` (verified facts + known bugs + things nobody has verified).

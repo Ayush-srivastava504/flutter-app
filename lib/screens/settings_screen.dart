@@ -8,10 +8,13 @@ import '../ai/gen/ai_provider.dart';
 import '../ai/gen/generation_service.dart';
 import '../app/launch_gate.dart' show appPrefsProvider;
 import '../app/app_theme.dart';
+import '../services/account_service.dart';
+import '../services/ads_service.dart';
 import '../services/analytics_service.dart';
 import '../widgets/common/ui_kit.dart';
 
-/// Settings: AI keys (bring your own), privacy (analytics opt-out), about.
+/// Settings: AI keys (bring your own), account, privacy (analytics opt-out,
+/// ad consent), about.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
@@ -27,7 +30,7 @@ class SettingsScreen extends ConsumerWidget {
             padding: EdgeInsets.fromLTRB(4, 0, 4, 12),
             child: Text(
               'Generate images and videos with your own account. Your key is stored encrypted on this phone, '
-              'and requests go straight from your phone to the provider — ClipForge has no server and never sees '
+              'and requests go straight from your phone to the provider — Cliper has no server and never sees '
               'your prompts. The provider bills you for what you generate.',
               style: TextStyle(color: AppColors.textDim, fontSize: 12.5, height: 1.35),
             ),
@@ -36,14 +39,17 @@ class SettingsScreen extends ConsumerWidget {
             _ProviderCard(provider: p, store: ref.read(aiKeyStoreProvider)),
             const SizedBox(height: 12),
           ],
+          const SectionHeader('Account'),
+          const _AccountTile(),
           const SectionHeader('Privacy'),
           const _AnalyticsTile(),
+          const _AdPrivacyTile(),
           const SectionHeader('About'),
           TapCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             onTap: () {
               registerNativeLicences();
-              showLicensePage(context: context, applicationName: 'ClipForge');
+              showLicensePage(context: context, applicationName: 'Cliper');
             },
             child: const Row(children: [
               Icon(Icons.description_outlined, color: AppColors.textDim),
@@ -341,4 +347,144 @@ class _StatusPill extends StatelessWidget {
               style: TextStyle(color: on ? AppColors.ok : AppColors.textDim, fontSize: 11, fontWeight: FontWeight.w700)),
         ]),
       );
+}
+
+/// Sign in with Google / sign out / delete account.
+class _AccountTile extends StatefulWidget {
+  const _AccountTile();
+
+  @override
+  State<_AccountTile> createState() => _AccountTileState();
+}
+
+class _AccountTileState extends State<_AccountTile> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    setState(() => _busy = true);
+    try {
+      await action();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Account: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text('Your Cliper account is deleted permanently. '
+            'Projects and videos on this phone are not touched.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (ok == true) await _run(AccountService.instance.deleteAccount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: AccountService.instance.available,
+      builder: (context, avail) {
+        if (avail.data != true) {
+          return TapCard(
+            padding: const EdgeInsets.all(16),
+            child: Row(children: [
+              const Icon(Icons.account_circle_outlined, color: AppColors.textDim),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(avail.hasData ? 'Accounts are not available in this build.' : 'Checking…',
+                    style: const TextStyle(color: AppColors.textDim)),
+              ),
+            ]),
+          );
+        }
+        return StreamBuilder(
+          stream: AccountService.instance.userChanges(),
+          builder: (context, snap) {
+            final user = snap.data;
+            return TapCard(
+              padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Icon(Icons.account_circle_outlined, color: AppColors.textDim),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(user == null ? 'Not signed in' : (user.displayName ?? 'Signed in'),
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 2),
+                      Text(
+                        user == null
+                            ? 'Optional. Your projects stay on this phone either way.'
+                            : (user.email ?? ''),
+                        style: const TextStyle(color: AppColors.textDim, fontSize: 12),
+                      ),
+                    ]),
+                  ),
+                  if (_busy) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                ]),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, children: [
+                  if (user == null)
+                    FilledButton.icon(
+                      onPressed: _busy ? null : () => _run(AccountService.instance.signInWithGoogle),
+                      icon: const Icon(Icons.login_rounded, size: 18),
+                      label: const Text('Sign in with Google'),
+                    )
+                  else ...[
+                    OutlinedButton(
+                      onPressed: _busy ? null : () => _run(AccountService.instance.signOut),
+                      child: const Text('Sign out'),
+                    ),
+                    TextButton(
+                      onPressed: _busy ? null : _confirmDelete,
+                      child: const Text('Delete account', style: TextStyle(color: Colors.redAccent)),
+                    ),
+                  ],
+                ]),
+              ]),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Re-opens the ad consent form (shown only where UMP says it is required,
+/// e.g. EEA/UK users).
+class _AdPrivacyTile extends StatelessWidget {
+  const _AdPrivacyTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: Ads.instance.privacyOptionsRequired,
+      builder: (context, required, _) {
+        if (!required) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: TapCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            onTap: Ads.instance.showPrivacyOptions,
+            child: const Row(children: [
+              Icon(Icons.privacy_tip_outlined, color: AppColors.textDim),
+              SizedBox(width: 12),
+              Expanded(child: Text('Ad privacy choices', style: TextStyle(fontWeight: FontWeight.w600))),
+              Icon(Icons.chevron_right_rounded, color: AppColors.textFaint),
+            ]),
+          ),
+        );
+      },
+    );
+  }
 }

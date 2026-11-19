@@ -124,8 +124,8 @@ class AudioStudioService {
           'name': '$safe.${format.ext}',
           'mime': mime,
         }) ??
-        'Music/ClipForge';
+        'Music/Cliper';
   }
 
-  Future<void> share(File file) => Share.shareXFiles([XFile(file.path)], text: 'Made with ClipForge');
+  Future<void> share(File file) => Share.shareXFiles([XFile(file.path)], text: 'Made with Cliper');
 }

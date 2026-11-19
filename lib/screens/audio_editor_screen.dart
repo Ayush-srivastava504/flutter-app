@@ -829,7 +829,7 @@ class _SaveSheetState extends ConsumerState<_SaveSheet> {
           FilledButton.icon(
             onPressed: busy ? null : _saveToPhone,
             icon: const Icon(Icons.download_rounded, size: 18),
-            label: const Text('Save to phone (Music/ClipForge)'),
+            label: const Text('Save to phone (Music/Cliper)'),
           ),
           const SizedBox(height: 8),
           OutlinedButton.icon(

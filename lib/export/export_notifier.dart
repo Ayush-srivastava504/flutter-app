@@ -73,7 +73,7 @@ class ExportNotifier {
       await _plugin.show(
         _id,
         success ? 'Export complete' : 'Export failed',
-        message ?? (success ? 'Your video is ready to share.' : 'Open ClipForge to try again.'),
+        message ?? (success ? 'Your video is ready to share.' : 'Open Cliper to try again.'),
         const NotificationDetails(
           android: AndroidNotificationDetails(
             _channelId,

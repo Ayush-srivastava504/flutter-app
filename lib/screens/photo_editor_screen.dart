@@ -203,7 +203,7 @@ class _PhotoEditorScreenState extends ConsumerState<PhotoEditorScreen> {
         duration: const Duration(seconds: 6),
         action: SnackBarAction(
           label: 'Share',
-          onPressed: () => Share.shareXFiles([XFile(r.path)], text: 'Edited with ClipForge'),
+          onPressed: () => Share.shareXFiles([XFile(r.path)], text: 'Edited with Cliper'),
         ),
       ));
     } on PhotoExportException catch (e) {

@@ -6,7 +6,9 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-precision mediump float;
+// highp like look.frag/adjust.frag: fp16 is too coarse for full-HD
+// positions on some GPUs.
+precision highp float;
 
 uniform vec2 uSize;         // set by the engine
 uniform vec4 uKey;          // key colour rgb (0..1), similarity

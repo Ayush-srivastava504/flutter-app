@@ -6,7 +6,10 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-precision mediump float;
+// highp, not mediump: on fp16 GPUs (e.g. Adreno) the grain hash below
+// multiplies pixel positions by ~456 and overflows 65504 past ~127 px,
+// giving NaN = black for most of the frame (phone bug, 2026-11-18).
+precision highp float;
 
 uniform vec2 uSize;        // set by the engine (ImageFilter.shader)
 uniform vec4 uRowR;        // colour matrix rows: r,g,b coefficients + offset (0..1)

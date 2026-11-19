@@ -9,6 +9,7 @@ import '../export/export_inputs.dart';
 import '../export/export_models.dart';
 import '../export/export_service.dart';
 import '../providers/timeline_providers.dart';
+import '../services/ads_service.dart';
 import '../widgets/common/state_views.dart';
 
 class ExportScreen extends ConsumerStatefulWidget {
@@ -51,6 +52,38 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       if (quality != null) _quality = quality;
       _fps = fps;
     });
+  }
+
+  /// 4K is unlocked per export by a rewarded ad. When no ad can be shown
+  /// (ads off, offline, no fill) the export just goes ahead.
+  bool _uhdUnlocked = false;
+
+  Future<void> _startExport(ExportController controller) async {
+    if (_quality == ExportQuality.p2160 && !_uhdUnlocked && Ads.instance.ready.value) {
+      final watch = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Unlock 4K export'),
+          content: const Text('Watch a short ad to export this video in 4K. '
+              'Every other quality is free, no ad needed.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Watch ad')),
+          ],
+        ),
+      );
+      if (watch != true || !mounted) return;
+      final outcome = await Ads.instance.unlockWithRewardedAd();
+      if (!mounted) return;
+      if (outcome == RewardOutcome.skipped) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Watch the whole ad to unlock 4K, or pick 1080p.')));
+        return;
+      }
+      _uhdUnlocked = true; // earned, or no ad available: don't hold the export hostage
+    }
+    await controller.start(_quality, fps: _fps, enhance: _enhance);
+    _uhdUnlocked = false; // one ad, one 4K export
   }
 
   void _saveChoices() => ref.read(appPrefsProvider).setExportSettings(qualityName: _quality.name, fps: _fps);
@@ -108,6 +141,17 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           _saveChoices();
         },
       ),
+      if (_quality == ExportQuality.p2160 && Ads.instance.ready.value) ...[
+        const SizedBox(height: 6),
+        const Row(children: [
+          Icon(Icons.ondemand_video_rounded, size: 14, color: Colors.white60),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text('4K: watch a short ad to unlock this export.',
+                style: TextStyle(color: Colors.white60, fontSize: 12)),
+          ),
+        ]),
+      ],
       const SizedBox(height: 20),
       Text('Frame rate', style: Theme.of(context).textTheme.titleMedium),
       const SizedBox(height: 12),
@@ -140,7 +184,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       Text('$seconds s • about $mb MB', style: const TextStyle(color: Colors.white60)),
       const SizedBox(height: 24),
       FilledButton.icon(
-        onPressed: () => controller.start(_quality, fps: _fps, enhance: _enhance),
+        onPressed: () => _startExport(controller),
         icon: const Icon(Icons.movie_filter_outlined),
         label: const Text('Export video'),
       ),
@@ -182,7 +226,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
       await ref.read(galleryShareProvider).shareFile(
             path,
             mimeType: 'application/xml',
-            text: 'ClipForge project (FCPXML)',
+            text: 'Cliper project (FCPXML)',
           );
     } finally {
       if (mounted) setState(() => _exportingProjectFile = false);

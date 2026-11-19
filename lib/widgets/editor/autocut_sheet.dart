@@ -69,7 +69,7 @@ class _AutoCutSheetState extends ConsumerState<_AutoCutSheet> {
             Text('AutoCut', style: Theme.of(context).textTheme.titleLarge),
           ]),
           const SizedBox(height: 4),
-          const Text('Let ClipForge do the cutting. Every option is one step, and undo takes it back.',
+          const Text('Let Cliper do the cutting. Every option is one step, and undo takes it back.',
               style: TextStyle(color: AppColors.textDim)),
           const SizedBox(height: 16),
           Container(

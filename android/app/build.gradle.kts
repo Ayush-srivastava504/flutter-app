@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -31,13 +33,43 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // AdMob App ID (not a secret). android/admob.properties:
+        //   admobAppId=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+        // Without it: Google's public test App ID (test ads only).
+        val admobProps = Properties()
+        val admobFile = rootProject.file("admob.properties")
+        if (admobFile.exists()) admobFile.inputStream().use { admobProps.load(it) }
+        manifestPlaceholders["admobAppId"] =
+            admobProps.getProperty("admobAppId") ?: "ca-app-pub-3940256099942544~3347511713"
+    }
+
+    // Release signing: android/key.properties (gitignored) points at the upload
+    // keystore. Without it, release builds fall back to the debug key and must
+    // not be uploaded to Play.
+    val keyProps = Properties()
+    val keyPropsFile = rootProject.file("key.properties")
+    if (keyPropsFile.exists()) keyPropsFile.inputStream().use { keyProps.load(it) }
+
+    signingConfigs {
+        if (keyPropsFile.exists()) {
+            create("release") {
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keyPropsFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("key.properties missing: release build is signed with the DEBUG key (not uploadable)")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

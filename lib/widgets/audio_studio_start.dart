@@ -121,7 +121,7 @@ class _RecordDialogState extends State<_RecordDialog> {
 
   Future<void> _start() async {
     if (!await _rec.ensurePermission()) {
-      setState(() => _error = 'ClipForge needs the microphone. Allow it in Settings → Apps → ClipForge.');
+      setState(() => _error = 'Cliper needs the microphone. Allow it in Settings → Apps → Cliper.');
       return;
     }
     await _rec.start();

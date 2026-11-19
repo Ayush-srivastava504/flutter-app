@@ -54,7 +54,7 @@ class _RecorderSheetState extends ConsumerState<_RecorderSheet> {
   Future<void> _start() async {
     setState(() => _error = null);
     if (!await _recorder.ensurePermission()) {
-      setState(() => _error = 'ClipForge needs the microphone to record. Allow it in Settings → Apps → ClipForge.');
+      setState(() => _error = 'Cliper needs the microphone to record. Allow it in Settings → Apps → Cliper.');
       return;
     }
     try {

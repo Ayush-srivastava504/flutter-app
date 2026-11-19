@@ -88,7 +88,7 @@ void main() {
     test('fill scales up and crops, no padding', () {
       final g = graph(build([video('/a.mp4', fit: 'fill')]));
       expect(g, contains('force_original_aspect_ratio=increase:flags=lanczos,crop='));
-      expect(g, isNot(contains('pad=')));
+      expect(g, isNot(matches(RegExp(r'(?<![a-z])pad='))));  // not the `tpad` length clamp
     });
     test('blur splits into a blurred cover and a fitted foreground, then overlays', () {
       final g = graph(build([video('/a.mp4', fit: 'blur')]));
@@ -119,6 +119,24 @@ void main() {
     });
     test('on but no music: nothing changes', () {
       expect(graph(build([video('/a.mp4')], duck: true)), isNot(contains('sidechaincompress')));
+    });
+  });
+
+  // Phone camera files (Galaxy A36, 2026-11-18): low-light video with long
+  // frame gaps ran past its trim point, and audio tracks shorter than the
+  // video ended early, so sound drifted and beat cuts slipped.
+  group('every video clip is exactly its trimmed length', () {
+    test('video is padded and cut to the clip length after fps', () {
+      final g = graph(build([video('/a.mp4')]));
+      expect(g, contains('fps=30,tpad=stop_mode=clone:stop_duration=4.000,trim=end=4.000,'));
+    });
+    test('clip audio is padded and cut to the clip length', () {
+      expect(graph(build([video('/a.mp4')])), contains('apad,atrim=0:4.000,asetpts=PTS-STARTPTS[a0]'));
+    });
+    test('at 2x speed the clamp uses the sped-up length', () {
+      final g = graph(build([video('/a.mp4', speed: 2.0)]));
+      expect(g, contains('trim=end=2.000,'));
+      expect(g, contains('atrim=0:2.000'));
     });
   });
 }

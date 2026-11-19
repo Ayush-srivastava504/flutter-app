@@ -103,6 +103,8 @@ def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, tex
             ch.append(f"trim=start={sec(c['start'])}:end={sec(c['end'])},{pts}")
         ch += rotate_flip(c)
         ch.append(f"fps={fps}")
+        if not c['photo']:  # exactly d long (mirrors export_command_builder, 2026-11-18)
+            ch += [f"tpad=stop_mode=clone:stop_duration={sec(d)}", f"trim=end={sec(d)}"]
         head=f"[{i}:v]"
         fit=c.get('fit','fit')
         if fit=='fill':
@@ -130,7 +132,8 @@ def build_export(clips, overlays, music, aspect, short, out, encoder, fonts, tex
         if c.get('has_audio') and not c['photo']:
             vol=0 if c.get('muted') else c.get('volume',1.0)
             a=[f"atrim=start={sec(c['start'])}:end={sec(c['end'])}","asetpts=PTS-STARTPTS"]+atempo_chain(sp)+[
-               f"aresample={AR}","aformat=sample_fmts=fltp:channel_layouts=stereo",f"volume={vol:.3f}"]
+               f"aresample={AR}","aformat=sample_fmts=fltp:channel_layouts=stereo",f"volume={vol:.3f}",
+               "apad",f"atrim=0:{sec(d)}","asetpts=PTS-STARTPTS"]  # exactly the clip's length (2026-11-18)
             src=f"[{i}:a]"
         else:
             a=[f"anullsrc=r={AR}:cl=stereo","aformat=sample_fmts=fltp:channel_layouts=stereo",f"atrim=0:{sec(d)}","asetpts=PTS-STARTPTS"]

@@ -132,7 +132,7 @@ class ClipForgeLogo extends StatelessWidget {
           TextSpan(children: [
             const TextSpan(text: 'Clip', style: TextStyle(fontWeight: FontWeight.w800)),
             TextSpan(
-              text: 'Forge',
+              text: 'er',
               style: TextStyle(fontWeight: FontWeight.w400, color: AppColors.text.withValues(alpha: 0.72)),
             ),
           ]),

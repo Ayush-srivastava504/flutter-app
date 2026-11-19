@@ -11,7 +11,7 @@
     <!-- AI generation (bring your own key) and Firebase analytics. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="ClipForge"
+        android:label="Cliper"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -41,6 +41,11 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- AdMob App ID: from android/admob.properties (build.gradle.kts);
+             Google's test App ID when that file is absent. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="${admobAppId}"/>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

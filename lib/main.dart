@@ -20,7 +20,7 @@ class VideoEditorApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ClipForge',
+      title: 'Cliper',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       onGenerateRoute: AppRouter.onGenerateRoute,

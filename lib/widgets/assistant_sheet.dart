@@ -750,7 +750,7 @@ class _CreatePanelState extends ConsumerState<_CreatePanel> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Uses your ${_provider?.label ?? ''} account — they bill you, not ClipForge. '
+            'Uses your ${_provider?.label ?? ''} account — they bill you, not Cliper. '
             'Fits your project\'s frame shape and lands at the end of the timeline.',
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppColors.textFaint, fontSize: 11),

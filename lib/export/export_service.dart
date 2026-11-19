@@ -129,6 +129,7 @@ class ExportService {
     await _pruneOldExports(root);
     final work = Directory(p.join(root.path, 'export_${DateTime.now().millisecondsSinceEpoch}'));
     await work.create(recursive: true);
+    var succeeded = false;
 
     try {
       final fonts = await _materialiseFonts(root);
@@ -142,7 +143,7 @@ class ExportService {
       final clips = exportClipsFrom(clipRows, hasAudio);
       final overlays = exportOverlaysFrom(overlayRows);
       final music = exportMusicFrom(audioRow);
-      final output = p.join(work.path, 'ClipForge_${DateTime.now().millisecondsSinceEpoch}.mp4');
+      final output = p.join(work.path, 'Cliper_${DateTime.now().millisecondsSinceEpoch}.mp4');
 
       ExportFailure? last;
       for (var i = 0; i < _encoders.length; i++) {
@@ -168,6 +169,7 @@ class ExportService {
 
         if (result.success && await File(output).exists() && await File(output).length() > 0) {
           onProgress(1);
+          succeeded = true;
           lastEncoderUsed = _encoders[i];
           debugPrint('[export] OK encoder: ${_encoders[i].name} quality: ${quality.label} @ $fps fps '
               'enhance: $enhance\ncommand: ffmpeg ${cmd.args.join(' ')}');
@@ -195,12 +197,20 @@ class ExportService {
       final kind = full ? ExportFailureKind.insufficientStorage : ExportFailureKind.unknown;
       throw ExportFailure(kind, failureMessage(kind), detail: e.toString());
     } finally {
-      // Text scratch files are always disposable; the finished MP4 is kept until the
-      // caller has saved/shared it and is swept by _pruneOldExports on a later run.
-      for (final f in work.listSync().whereType<File>().where((f) => f.path.endsWith('.txt'))) {
+      // A cancelled or failed export leaves nothing behind (a partial MP4 can be
+      // hundreds of MB). Text scratch files are always disposable; a finished MP4
+      // is kept until the caller has saved/shared it and is swept by
+      // _pruneOldExports on a later run.
+      if (!succeeded) {
         try {
-          f.deleteSync();
+          if (work.existsSync()) work.deleteSync(recursive: true);
         } catch (_) {}
+      } else {
+        for (final f in work.listSync().whereType<File>().where((f) => f.path.endsWith('.txt'))) {
+          try {
+            f.deleteSync();
+          } catch (_) {}
+        }
       }
     }
   }

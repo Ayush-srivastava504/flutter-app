@@ -68,14 +68,14 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** Copies [path] into Music/ClipForge; returns where it went. */
+    /** Copies [path] into Music/Cliper; returns where it went. */
     private fun saveAudio(path: String, name: String, mime: String): String {
         val src = File(path)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Audio.Media.DISPLAY_NAME, name)
                 put(MediaStore.Audio.Media.MIME_TYPE, mime)
-                put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/ClipForge")
+                put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/Cliper")
                 put(MediaStore.Audio.Media.IS_PENDING, 1)
             }
             val resolver = contentResolver
@@ -85,10 +85,10 @@ class MainActivity : FlutterActivity() {
             values.clear()
             values.put(MediaStore.Audio.Media.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
-            return "Music/ClipForge/$name"
+            return "Music/Cliper/$name"
         }
         @Suppress("DEPRECATION")
-        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "ClipForge")
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC), "Cliper")
         dir.mkdirs()
         val dest = File(dir, name)
         src.copyTo(dest, overwrite = true)
