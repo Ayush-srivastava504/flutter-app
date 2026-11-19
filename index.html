@@ -3,12 +3,131 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cliper — Video Editor for Android</title>
-<meta name="description" content="Cliper is an on-device video, photo and audio editor for Android, built with Flutter and FFmpeg. Download the APK.">
-<meta property="og:title" content="Cliper — Video Editor for Android">
-<meta property="og:description" content="Templates, 33 looks, 26 transitions, text, music and 4K export — all on your phone.">
-<meta property="og:image" content="icon.png">
-<link rel="icon" href="icon.png">
+<title>Cliper – Free Offline Video Editor for Android, No Watermark</title>
+<meta name="description" content="Cliper is a free offline video editor for Android: 20 templates, 33 looks, 26 transitions, titles, music and 4K export with no watermark. Download the APK.">
+<meta name="author" content="Ayush Srivastava">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#0a0a0c">
+<link rel="canonical" href="https://ayush-srivastava504.github.io/flutter-app/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cliper">
+<meta property="og:url" content="https://ayush-srivastava504.github.io/flutter-app/">
+<meta property="og:title" content="Cliper – Free Offline Video Editor for Android">
+<meta property="og:description" content="Templates, 33 looks, 26 transitions, titles, music and 4K export. Edits stay on your phone. No watermark.">
+<meta property="og:image" content="https://ayush-srivastava504.github.io/flutter-app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Cliper offline video editor for Android">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Cliper – Free Offline Video Editor for Android">
+<meta name="twitter:description" content="Templates, looks, transitions, titles, music and 4K export. No watermark.">
+<meta name="twitter:image" content="https://ayush-srivastava504.github.io/flutter-app/og.png">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="preload" as="image" href="screens/editor.webp" fetchpriority="high">
+<script type="application/ld+json">
+[
+ {
+  "@context": "https://schema.org",
+  "@type": "MobileApplication",
+  "name": "Cliper",
+  "alternateName": "Cliper Video Editor",
+  "description": "Free offline video editor for Android with templates, colour looks, transitions, titles, music and 4K export. No watermark.",
+  "operatingSystem": "Android 7.0+",
+  "applicationCategory": "MultimediaApplication",
+  "applicationSubCategory": "Video editor",
+  "softwareVersion": "1.0.0",
+  "fileSize": "67MB",
+  "downloadUrl": "https://ayush-srivastava504.github.io/flutter-app/download/Cliper-1.0.0-arm64.apk",
+  "installUrl": "https://ayush-srivastava504.github.io/flutter-app/download/Cliper-1.0.0-arm64.apk",
+  "url": "https://ayush-srivastava504.github.io/flutter-app/",
+  "image": "https://ayush-srivastava504.github.io/flutter-app/og.png",
+  "screenshot": [
+   "https://ayush-srivastava504.github.io/flutter-app/screens/editor.webp",
+   "https://ayush-srivastava504.github.io/flutter-app/screens/home.webp",
+   "https://ayush-srivastava504.github.io/flutter-app/screens/templates.webp",
+   "https://ayush-srivastava504.github.io/flutter-app/screens/template.webp",
+   "https://ayush-srivastava504.github.io/flutter-app/screens/done.webp"
+  ],
+  "featureList": [
+   "20 video templates",
+   "33 colour looks",
+   "16 effects",
+   "26 transitions",
+   "Text and subtitles",
+   "Music, sound effects and voice-over",
+   "Photo editor",
+   "Export up to 4K at 60 fps",
+   "Works offline",
+   "No watermark"
+  ],
+  "offers": {
+   "@type": "Offer",
+   "price": "0",
+   "priceCurrency": "USD"
+  },
+  "author": {
+   "@type": "Person",
+   "name": "Ayush Srivastava",
+   "url": "https://github.com/Ayush-srivastava504"
+  }
+ },
+ {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+   {
+    "@type": "Question",
+    "name": "Is Cliper free?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "Yes. The APK is free to download and use. A small banner ad shows on the home screen, and 4K exports are unlocked by watching a short ad."
+    }
+   },
+   {
+    "@type": "Question",
+    "name": "Does Cliper add a watermark?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "No. Exported videos and photos have no watermark at any resolution."
+    }
+   },
+   {
+    "@type": "Question",
+    "name": "Does Cliper work offline?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "Yes. Editing, previews and exports all run on the phone with FFmpeg, so your videos never leave the device. Only the ads and the optional Google sign-in use the internet."
+    }
+   },
+   {
+    "@type": "Question",
+    "name": "Which phones can run Cliper?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "Android 7.0 or newer on a 64-bit (arm64) phone, which covers almost every Android phone sold since 2017."
+    }
+   },
+   {
+    "@type": "Question",
+    "name": "Can Cliper export 4K video?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "Yes. You can export 480p, 720p, 1080p or 4K at 24, 30 or 60 fps using the phone's hardware H.264 encoder."
+    }
+   },
+   {
+    "@type": "Question",
+    "name": "How do I know the APK is genuine?",
+    "acceptedAnswer": {
+     "@type": "Answer",
+     "text": "Compare the SHA-256 checksum shown under the download button with the downloaded file. The APK is signed with the developer's release key."
+    }
+   }
+  ]
+ }
+]
+</script>
 <style>
   :root {
     --bg: #0a0a0c; --surface: #17181c; --surface-2: #1f2026; --line: #2a2b31;
@@ -88,13 +207,20 @@
 
   footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--faint); font-size: 14px; }
   footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; }
+  .faq { display: grid; gap: 10px; }
+  .faq details { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; }
+  .faq summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: "+"; color: var(--ember); font-weight: 700; }
+  .faq details[open] summary::after { content: "\2013"; }
+  .faq p { margin: 10px 0 0; color: var(--dim); font-size: 14.5px; }
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
-    <a class="brand" href="#"><img src="icon.png" alt=""><b class="word">Clip<span>er</span></b></a>
-    <nav><a href="#features">Features</a><a href="#tech">Tech</a><a href="#install">Install</a></nav>
+    <a class="brand" href="./" aria-label="Cliper home"><img src="icon.png" alt="" width="28" height="28"><b class="word">Clip<span>er</span></b></a>
+    <nav aria-label="Sections"><a href="#features">Features</a><a href="#screens">Screenshots</a><a href="#faq">FAQ</a><a href="#install">Install</a></nav>
   </div>
 </header>
 
@@ -102,10 +228,10 @@
   <div class="hero">
     <div>
       <span class="eyebrow">Android · v1.0.0</span>
-      <h1>Edit videos <em>on your phone</em>, not in the cloud.</h1>
-      <p class="lede">Cliper is a full video, photo and audio studio for Android. Ready-made templates, cinematic looks, transitions, titles and music — rendered on the device with FFmpeg and exported up to 4K.</p>
+      <h1>The <em>offline video editor</em> for Android.</h1>
+      <p class="lede">Edit on your phone, not in the cloud, with no watermark. Cliper is a free video, photo and audio studio for Android. Ready-made templates, cinematic looks, transitions, titles and music — rendered on the device with FFmpeg and exported up to 4K.</p>
       <div class="download">
-        <a class="btn" href="download/Cliper-1.0.0-arm64.apk" download>
+        <a class="btn" href="download/Cliper-1.0.0-arm64.apk" download title="Download the Cliper APK for Android (67 MB)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
           Download APK
         </a>
@@ -118,11 +244,11 @@
         <div class="checksum">SHA-256 c2a337d6577ee9463784028cf950dc1d58b43ec9cf16cf98f19cc3b4f0616cd6</div>
       </div>
     </div>
-    <div class="phone"><img src="screens/editor.webp" alt="Cliper editor with a travel template" width="540" height="1052"></div>
+    <div class="phone"><img src="screens/editor.webp" alt="Cliper Android video editor timeline with a travel template applied" width="540" height="1052" fetchpriority="high"></div>
   </div>
 
   <section id="features">
-    <h2>What it does</h2>
+    <h2>Video editor features</h2>
     <p class="sub">Everything below runs locally — your videos never leave the phone.</p>
     <div class="grid">
       <div class="card"><h3><span class="dot"></span>Templates</h3><p><span class="num">20</span> ready-made edits in 10 categories — vlogs, travel, gaming, Insta stories, birthdays. Beat-synced templates cut on the music's tempo.</p></div>
@@ -137,21 +263,21 @@
   </section>
 
   <section id="screens">
-    <h2>Screens</h2>
+    <h2>Screenshots</h2>
     <p class="sub">Captured from the release build on a Samsung Galaxy A36.</p>
     <div class="shots">
-      <figure><img src="screens/home.webp" alt="Home" width="540" height="1052" loading="lazy"><figcaption>Home</figcaption></figure>
-      <figure><img src="screens/welcome.webp" alt="Welcome" width="540" height="1052" loading="lazy"><figcaption>Welcome</figcaption></figure>
-      <figure><img src="screens/templates.webp" alt="Templates by style" width="540" height="1052" loading="lazy"><figcaption>Templates by style</figcaption></figure>
-      <figure><img src="screens/template.webp" alt="Template details" width="540" height="1052" loading="lazy"><figcaption>Template details</figcaption></figure>
-      <figure><img src="screens/editor.webp" alt="Editor with the template applied" width="540" height="1052" loading="lazy"><figcaption>Editor with the template applied</figcaption></figure>
-      <figure><img src="screens/done.webp" alt="Exported in 90 s on the phone" width="540" height="1052" loading="lazy"><figcaption>Exported in 90 s on the phone</figcaption></figure>
-      <figure><img src="screens/pro-tools.webp" alt="YouTube Studio tools" width="540" height="1052" loading="lazy"><figcaption>YouTube Studio tools</figcaption></figure>
+      <figure><img src="screens/home.webp" alt="Cliper home screen with YouTube Studio, Insta Clip and Quick Edit modes" width="540" height="1052" loading="lazy"><figcaption>Home</figcaption></figure>
+      <figure><img src="screens/welcome.webp" alt="Cliper welcome screen: works offline, private, up to 4K, templates" width="540" height="1052" loading="lazy"><figcaption>Welcome</figcaption></figure>
+      <figure><img src="screens/templates.webp" alt="Video templates grouped by style: cinematic vlog, travel, gaming" width="540" height="1052" loading="lazy"><figcaption>Templates by style</figcaption></figure>
+      <figure><img src="screens/template.webp" alt="Travel film template details: beat-synced cuts, look, effects and music" width="540" height="1052" loading="lazy"><figcaption>Template details</figcaption></figure>
+      <figure><img src="screens/editor.webp" alt="Video editor timeline with clips, music track and title" width="540" height="1052" loading="lazy"><figcaption>Editor with the template applied</figcaption></figure>
+      <figure><img src="screens/done.webp" alt="Export finished: 1080p video saved to the gallery with hardware H.264" width="540" height="1052" loading="lazy"><figcaption>Exported in 90 s on the phone</figcaption></figure>
+      <figure><img src="screens/pro-tools.webp" alt="YouTube Studio tools: enhance speech, jump cuts, scene split, loudness, chapters" width="540" height="1052" loading="lazy"><figcaption>YouTube Studio tools</figcaption></figure>
     </div>
   </section>
 
   <section id="tech">
-    <h2>How it's built</h2>
+    <h2>How Cliper is built</h2>
     <p class="sub">A Flutter app with a native media pipeline — one FFmpeg command renders the whole edit.</p>
     <div class="stack" style="margin-bottom:22px">
       <span class="chip">Flutter <i>3.47</i></span><span class="chip">Dart</span><span class="chip">Riverpod</span>
@@ -166,8 +292,21 @@
     </div>
   </section>
 
+  <section id="faq">
+    <h2>Frequently asked questions</h2>
+    <p class="sub">About the free Cliper video editor APK.</p>
+    <div class="faq">
+      <details><summary>Is Cliper free?</summary><p>Yes. The APK is free to download and use. A small banner ad shows on the home screen, and 4K exports are unlocked by watching a short ad.</p></details>
+      <details><summary>Does Cliper add a watermark?</summary><p>No. Exported videos and photos have no watermark at any resolution.</p></details>
+      <details><summary>Does Cliper work offline?</summary><p>Yes. Editing, previews and exports all run on the phone with FFmpeg, so your videos never leave the device. Only the ads and the optional Google sign-in use the internet.</p></details>
+      <details><summary>Which phones can run Cliper?</summary><p>Android 7.0 or newer on a 64-bit (arm64) phone, which covers almost every Android phone sold since 2017.</p></details>
+      <details><summary>Can Cliper export 4K video?</summary><p>Yes. You can export 480p, 720p, 1080p or 4K at 24, 30 or 60 fps using the phone's hardware H.264 encoder.</p></details>
+      <details><summary>How do I know the APK is genuine?</summary><p>Compare the SHA-256 checksum shown under the download button with the downloaded file. The APK is signed with the developer's release key.</p></details>
+    </div>
+  </section>
+
   <section id="install">
-    <h2>Install</h2>
+    <h2>How to install the Cliper APK</h2>
     <p class="sub">Cliper isn't on the Play Store yet, so Android asks you to allow the install.</p>
     <ol class="steps">
       <li><b>Download the APK</b> with the button above on your Android phone.</li>
@@ -181,7 +320,7 @@
 <footer>
   <div class="wrap">
     <span>© 2026 Ayush Srivastava · Cliper</span>
-    <a href="https://github.com/Ayush-srivastava504/flutter-app">Source on GitHub</a>
+    <span><a href="#install">Install guide</a> · <a href="#faq">FAQ</a> · <a href="https://github.com/Ayush-srivastava504/flutter-app" rel="author">Source on GitHub</a></span>
   </div>
 </footer>
 </body>
