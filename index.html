@@ -1,17 +1,88 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClipForge — Download</title>
+<title>ClipForge Video Editor</title>
+<meta name="description" content="ClipForge: a non-destructive mobile video and photo editor for Android, built with Flutter, Riverpod, Drift and FFmpeg.">
 <style>
-:root{--bg:#0f1115;--card:#181b22;--fg:#eef0f4;--mut:#9aa3b2;--acc:#ff5a36}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
-.c{background:var(--card);border-radius:20px;padding:40px 28px;max-width:440px;width:100%;text-align:center}
-h1{margin:0 0 6px;font-size:2rem}p{color:var(--mut);margin:0 0 24px}
-a.b{display:inline-block;background:var(--acc);color:#fff;text-decoration:none;font-weight:600;padding:14px 28px;border-radius:12px;font-size:1.05rem}
-a.b:hover{filter:brightness(1.1)}ol{text-align:left;color:var(--mut);font-size:.9rem;margin:28px 0 0;padding-left:20px}
-.s{margin-top:14px;font-size:.85rem}.s a{color:var(--mut)}
-</style></head><body><div class="c">
-<h1>ClipForge</h1><p>Video &amp; photo editor for Android</p>
-<a class="b" href="https://github.com/Ayush-srivastava504/flutter-app/releases/latest/download/ClipForge.apk">Download APK</a>
-<div class="s"><a href="https://github.com/Ayush-srivastava504/flutter-app/releases">All releases</a></div>
-<ol><li>Tap <b>Download APK</b> on your Android phone.</li><li>Open the file; allow “Install unknown apps” if asked.</li><li>Tap <b>Install</b>.</li></ol>
-</div></body></html>
+:root{--bg:#0d0f14;--card:#161a22;--line:#252b36;--fg:#eef0f4;--mut:#98a2b3;--acc:#ff5a36;--acc2:#ff8a3d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.w{max-width:960px;margin:0 auto;padding:0 16px}
+header{padding:72px 0 48px;text-align:center;background:radial-gradient(ellipse at top,rgba(255,90,54,.18),transparent 60%)}
+.logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px}
+.logo svg{width:34px;height:34px}
+h1{font-size:clamp(2.2rem,6vw,3.2rem);margin:0;letter-spacing:-.02em}
+.tag{color:var(--mut);font-size:1.15rem;margin:8px auto 28px;max-width:560px}
+.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+a.b{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:600;padding:14px 26px;border-radius:12px}
+a.p{background:var(--acc);color:#fff}a.p:hover{filter:brightness(1.1)}
+a.s{border:1px solid var(--line);color:var(--fg)}a.s:hover{background:var(--card)}
+.meta{color:var(--mut);font-size:.85rem;margin-top:14px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 56px}
+.st{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
+.st b{display:block;font-size:1.6rem}.st span{color:var(--mut);font-size:.85rem}
+h2{font-size:1.5rem;margin:0 0 18px}
+section{margin-bottom:56px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+.f h3{margin:0 0 6px;font-size:1.02rem}.f p{margin:0;color:var(--mut);font-size:.92rem}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:.9rem}
+pre{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;overflow-x:auto;font-size:.85rem;color:var(--mut);margin:0}
+pre b{color:var(--fg)}
+ol{color:var(--mut);padding-left:20px}ol b{color:var(--fg)}
+footer{border-top:1px solid var(--line);padding:24px 0;color:var(--mut);font-size:.85rem;text-align:center}
+footer a{color:var(--mut)}
+@media(max-width:720px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}header{padding:48px 0 36px}}
+</style></head><body>
+<header><div class="w">
+<div class="logo"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+<h1>ClipForge</h1>
+<p class="tag">A non-destructive video and photo editor for Android. Trim, add looks, music and text, then export an MP4, all on the phone.</p>
+<div class="btns">
+<a class="b p" href="https://github.com/Ayush-srivastava504/flutter-app/releases/latest/download/ClipForge.apk">&#11015; Download APK</a>
+<a class="b s" href="https://github.com/Ayush-srivastava504/flutter-app">View source on GitHub</a>
+</div>
+<div class="meta">Android 7.0+ &middot; arm64 / arm / x86_64 &middot; v1.0.0</div>
+</div></header>
+
+<main class="w">
+<div class="stats">
+<div class="st"><b>164</b><span>Dart source files</span></div>
+<div class="st"><b>436</b><span>automated tests</span></div>
+<div class="st"><b>GPU</b><span>shader looks</span></div>
+<div class="st"><b>H.264</b><span>hardware export</span></div>
+</div>
+
+<section><h2>Features</h2><div class="grid">
+<div class="f"><h3>Multi-clip timeline</h3><p>Import videos and photos, then trim, split, reorder and delete clips. Choose the aspect ratio for each project (9:16 by default).</p></div>
+<div class="f"><h3>GPU colour looks</h3><p>Real-time looks and chroma key written as GLSL fragment shaders, plus brightness, contrast and saturation filters.</p></div>
+<div class="f"><h3>Transitions &amp; text</h3><p>Fade and dissolve transitions. Text overlays with font, colour, position and timing.</p></div>
+<div class="f"><h3>Audio studio</h3><p>Background music with trim, offset and volume, plus voice-over recording and bundled loops.</p></div>
+<div class="f"><h3>Undo / redo + autosave</h3><p>Every edit is stored as a database row, so history and autosave come almost free.</p></div>
+<div class="f"><h3>Export &amp; share</h3><p>An FFmpeg filter graph renders the MP4 with hardware encoding and a progress notification, then saves it to the gallery. FCPXML export is also available.</p></div>
+</div></section>
+
+<section><h2>Tech stack</h2><div class="chips">
+<span class="chip">Flutter / Dart</span><span class="chip">Riverpod</span><span class="chip">Drift (SQLite)</span><span class="chip">FFmpegKit</span><span class="chip">GLSL fragment shaders</span><span class="chip">video_player</span><span class="chip">just_audio</span><span class="chip">Firebase Auth / Analytics / Crashlytics</span><span class="chip">Google Mobile Ads</span><span class="chip">Kotlin platform channel</span><span class="chip">Integration tests</span>
+</div></section>
+
+<section><h2>Architecture</h2>
+<pre><b>Screens &amp; widgets</b>   what the user sees        ref.watch() → auto-redraw
+        ↓                                      ↑ streams
+<b>Providers</b>           Riverpod glue
+        ↓                                      ↑
+<b>Database</b>            Drift / SQLite: the single source of truth
+        ↑ writes
+<b>Services</b>            import, probe, thumbnails
+<b>Export pipeline</b>     DB rows → FFmpeg filter graph → MP4</pre>
+<p style="color:var(--mut)">Your original media is never modified. An edit is just a number in a row ("trim clip 3 from 1.0 s to 4.0 s"), and the export step combines those rows into one new video.</p>
+</section>
+
+<section><h2>Install</h2><ol>
+<li>On your Android phone, tap <b>Download APK</b>.</li>
+<li>Open the downloaded file. If asked, allow <b>Install unknown apps</b>.</li>
+<li>Tap <b>Install</b>, then open ClipForge.</li>
+</ol></section>
+</main>
+<footer><div class="w">Built by Ayush Srivastava &middot; <a href="https://github.com/Ayush-srivastava504/flutter-app">GitHub</a> &middot; <a href="https://github.com/Ayush-srivastava504/flutter-app/releases">Releases</a></div></footer>
+</body></html>
