@@ -1,9 +1,9 @@
-# ClipForge — mobile video editor (Flutter)
+# Cliper — mobile video editor (Flutter)
 
-[![Download APK](https://img.shields.io/badge/Download-APK-ff5a36?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Ayush-srivastava504/flutter-app/releases/latest/download/ClipForge.apk)
-[![Website](https://img.shields.io/badge/Website-ClipForge-161a22?style=for-the-badge)](https://ayush-srivastava504.github.io/flutter-app/)
+[![Download APK](https://img.shields.io/badge/Download-APK-ff5a36?style=for-the-badge&logo=android&logoColor=white)](https://ayush-srivastava504.github.io/flutter-app/download/Cliper-1.0.0-arm64.apk)
+[![Website](https://img.shields.io/badge/Website-Cliper-161a22?style=for-the-badge)](https://ayush-srivastava504.github.io/flutter-app/)
 
-**Stack:** Flutter · Riverpod · Drift (SQLite) · FFmpegKit · GLSL shaders · Firebase — 436 automated tests.
+**Stack:** Flutter · Riverpod · Drift (SQLite) · FFmpegKit · GLSL shaders · Firebase — 463 automated tests, plus on-device export tests.
 
 Import clips and photos, trim/reorder, add filters, transitions, music and text, then export an MP4.
 Everything you edit is stored as small database rows; your original media is never modified.
