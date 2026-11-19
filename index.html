@@ -1,88 +1,174 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ClipForge Video Editor</title>
-<meta name="description" content="ClipForge: a non-destructive mobile video and photo editor for Android, built with Flutter, Riverpod, Drift and FFmpeg.">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cliper — Video Editor for Android</title>
+<meta name="description" content="Cliper is an on-device video, photo and audio editor for Android, built with Flutter and FFmpeg. Download the APK.">
+<meta property="og:title" content="Cliper — Video Editor for Android">
+<meta property="og:description" content="Templates, 33 looks, 26 transitions, text, music and 4K export — all on your phone.">
+<meta property="og:image" content="icon.png">
+<link rel="icon" href="icon.png">
 <style>
-:root{--bg:#0d0f14;--card:#161a22;--line:#252b36;--fg:#eef0f4;--mut:#98a2b3;--acc:#ff5a36;--acc2:#ff8a3d}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-.w{max-width:960px;margin:0 auto;padding:0 16px}
-header{padding:72px 0 48px;text-align:center;background:radial-gradient(ellipse at top,rgba(255,90,54,.18),transparent 60%)}
-.logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px}
-.logo svg{width:34px;height:34px}
-h1{font-size:clamp(2.2rem,6vw,3.2rem);margin:0;letter-spacing:-.02em}
-.tag{color:var(--mut);font-size:1.15rem;margin:8px auto 28px;max-width:560px}
-.btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-a.b{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:600;padding:14px 26px;border-radius:12px}
-a.p{background:var(--acc);color:#fff}a.p:hover{filter:brightness(1.1)}
-a.s{border:1px solid var(--line);color:var(--fg)}a.s:hover{background:var(--card)}
-.meta{color:var(--mut);font-size:.85rem;margin-top:14px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 56px}
-.st{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;text-align:center}
-.st b{display:block;font-size:1.6rem}.st span{color:var(--mut);font-size:.85rem}
-h2{font-size:1.5rem;margin:0 0 18px}
-section{margin-bottom:56px}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.f{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-.f h3{margin:0 0 6px;font-size:1.02rem}.f p{margin:0;color:var(--mut);font-size:.92rem}
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:.9rem}
-pre{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;overflow-x:auto;font-size:.85rem;color:var(--mut);margin:0}
-pre b{color:var(--fg)}
-ol{color:var(--mut);padding-left:20px}ol b{color:var(--fg)}
-footer{border-top:1px solid var(--line);padding:24px 0;color:var(--mut);font-size:.85rem;text-align:center}
-footer a{color:var(--mut)}
-@media(max-width:720px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}header{padding:48px 0 36px}}
-</style></head><body>
-<header><div class="w">
-<div class="logo"><svg viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
-<h1>ClipForge</h1>
-<p class="tag">A non-destructive video and photo editor for Android. Trim, add looks, music and text, then export an MP4, all on the phone.</p>
-<div class="btns">
-<a class="b p" href="https://github.com/Ayush-srivastava504/flutter-app/releases/latest/download/ClipForge.apk">&#11015; Download APK</a>
-<a class="b s" href="https://github.com/Ayush-srivastava504/flutter-app">View source on GitHub</a>
-</div>
-<div class="meta">Android 7.0+ &middot; arm64 / arm / x86_64 &middot; v1.0.0</div>
-</div></header>
+  :root {
+    --bg: #0a0a0c; --surface: #17181c; --surface-2: #1f2026; --line: #2a2b31;
+    --text: #f2eee8; --dim: #a29e97; --faint: #6f6b66; --ember: #ff7a45; --gold: #e8b65a;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--ember); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
 
-<main class="w">
-<div class="stats">
-<div class="st"><b>164</b><span>Dart source files</span></div>
-<div class="st"><b>436</b><span>automated tests</span></div>
-<div class="st"><b>GPU</b><span>shader looks</span></div>
-<div class="st"><b>H.264</b><span>hardware export</span></div>
-</div>
+  header { position: sticky; top: 0; z-index: 10; background: rgba(10,10,12,.82); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  header .wrap { display: flex; align-items: center; gap: 12px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; letter-spacing: -.3px; color: var(--text); }
+  .brand img { width: 30px; height: 30px; border-radius: 8px; }
+  .brand .word { font-weight: 800; }
+  .brand .word span { font-weight: 400; color: var(--dim); }
+  header nav { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
+  header nav a { color: var(--dim); }
+  @media (max-width: 560px) { header nav { display: none; } }
 
-<section><h2>Features</h2><div class="grid">
-<div class="f"><h3>Multi-clip timeline</h3><p>Import videos and photos, then trim, split, reorder and delete clips. Choose the aspect ratio for each project (9:16 by default).</p></div>
-<div class="f"><h3>GPU colour looks</h3><p>Real-time looks and chroma key written as GLSL fragment shaders, plus brightness, contrast and saturation filters.</p></div>
-<div class="f"><h3>Transitions &amp; text</h3><p>Fade and dissolve transitions. Text overlays with font, colour, position and timing.</p></div>
-<div class="f"><h3>Audio studio</h3><p>Background music with trim, offset and volume, plus voice-over recording and bundled loops.</p></div>
-<div class="f"><h3>Undo / redo + autosave</h3><p>Every edit is stored as a database row, so history and autosave come almost free.</p></div>
-<div class="f"><h3>Export &amp; share</h3><p>An FFmpeg filter graph renders the MP4 with hardware encoding and a progress notification, then saves it to the gallery. FCPXML export is also available.</p></div>
-</div></section>
+  .hero { padding: 64px 0 40px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 40px; align-items: center; }
+  @media (max-width: 860px) { .hero { grid-template-columns: 1fr; padding-top: 40px; } }
+  .eyebrow { display: inline-block; font-size: 13px; font-weight: 700; color: var(--ember); background: rgba(255,122,69,.12); border: 1px solid rgba(255,122,69,.3); padding: 4px 10px; border-radius: 99px; }
+  h1 { font-size: clamp(36px, 6vw, 60px); line-height: 1.05; letter-spacing: -1.5px; margin: 16px 0 14px; }
+  h1 em { font-style: normal; color: var(--ember); }
+  .lede { color: var(--dim); font-size: 18px; max-width: 34em; margin: 0 0 26px; }
 
-<section><h2>Tech stack</h2><div class="chips">
-<span class="chip">Flutter / Dart</span><span class="chip">Riverpod</span><span class="chip">Drift (SQLite)</span><span class="chip">FFmpegKit</span><span class="chip">GLSL fragment shaders</span><span class="chip">video_player</span><span class="chip">just_audio</span><span class="chip">Firebase Auth / Analytics / Crashlytics</span><span class="chip">Google Mobile Ads</span><span class="chip">Kotlin platform channel</span><span class="chip">Integration tests</span>
-</div></section>
+  .download { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; max-width: 460px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 15px 20px; border-radius: 14px; background: var(--ember); color: #1a0d06; font-weight: 800; font-size: 17px; border: 0; cursor: pointer; transition: transform .12s ease, filter .12s ease; }
+  .btn:hover { text-decoration: none; filter: brightness(1.06); transform: translateY(-1px); }
+  .btn svg { width: 22px; height: 22px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; font-size: 13px; color: var(--dim); }
+  .meta b { color: var(--text); font-weight: 600; }
+  .checksum { margin-top: 10px; font: 11px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--faint); word-break: break-all; }
 
-<section><h2>Architecture</h2>
-<pre><b>Screens &amp; widgets</b>   what the user sees        ref.watch() → auto-redraw
-        ↓                                      ↑ streams
-<b>Providers</b>           Riverpod glue
-        ↓                                      ↑
-<b>Database</b>            Drift / SQLite: the single source of truth
-        ↑ writes
-<b>Services</b>            import, probe, thumbnails
-<b>Export pipeline</b>     DB rows → FFmpeg filter graph → MP4</pre>
-<p style="color:var(--mut)">Your original media is never modified. An edit is just a number in a row ("trim clip 3 from 1.0 s to 4.0 s"), and the export step combines those rows into one new video.</p>
-</section>
+  .phone { justify-self: center; width: min(300px, 80vw); aspect-ratio: 1080/2340; border-radius: 34px; padding: 10px; background: #000; border: 1px solid #2c2d33; box-shadow: 0 30px 80px rgba(255,122,69,.18), 0 10px 30px rgba(0,0,0,.6); }
+  .phone.icononly { aspect-ratio: 1; width: min(240px,60vw); display: grid; place-items: center; padding: 40px; border-radius: 48px; background: radial-gradient(circle at 30% 20%, #2a1a12, #0a0a0c 70%); }
+  .phone.icononly img { border-radius: 36px; height: auto; }
+  .phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 26px; display: block; }
 
-<section><h2>Install</h2><ol>
-<li>On your Android phone, tap <b>Download APK</b>.</li>
-<li>Open the downloaded file. If asked, allow <b>Install unknown apps</b>.</li>
-<li>Tap <b>Install</b>, then open ClipForge.</li>
-</ol></section>
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 28px; letter-spacing: -.6px; margin: 0 0 8px; }
+  .sub { color: var(--dim); margin: 0 0 26px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .card p { margin: 0; color: var(--dim); font-size: 14.5px; }
+  .num { color: var(--ember); font-weight: 800; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); flex: none; }
+
+  .shots { display: grid; grid-auto-flow: column; grid-auto-columns: min(220px, 60vw); gap: 14px; overflow-x: auto; padding-bottom: 10px; scroll-snap-type: x mandatory; }
+  .shots figure { margin: 0; scroll-snap-align: start; }
+  .shots img { width: 100%; aspect-ratio: 1080/2340; object-fit: cover; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); display: block; }
+  .shots figcaption { font-size: 13px; color: var(--dim); margin-top: 8px; text-align: center; }
+
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  .steps li { counter-increment: s; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 14px 56px; position: relative; color: var(--dim); }
+  .steps li b { color: var(--text); }
+  .steps li::before { content: counter(s); position: absolute; left: 16px; top: 13px; width: 26px; height: 26px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); color: var(--ember); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { font-size: 13.5px; padding: 6px 12px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); color: var(--text); }
+  .chip i { font-style: normal; color: var(--faint); }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+  .stat .v { font-size: 30px; font-weight: 800; letter-spacing: -1px; }
+  .stat .l { color: var(--dim); font-size: 13.5px; }
+
+  footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--faint); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon.png" alt=""><b class="word">Clip<span>er</span></b></a>
+    <nav><a href="#features">Features</a><a href="#tech">Tech</a><a href="#install">Install</a></nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <span class="eyebrow">Android · v1.0.0</span>
+      <h1>Edit videos <em>on your phone</em>, not in the cloud.</h1>
+      <p class="lede">Cliper is a full video, photo and audio studio for Android. Ready-made templates, cinematic looks, transitions, titles and music — rendered on the device with FFmpeg and exported up to 4K.</p>
+      <div class="download">
+        <a class="btn" href="download/Cliper-1.0.0-arm64.apk" download>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 19h16"/></svg>
+          Download APK
+        </a>
+        <div class="meta">
+          <span><b>67 MB</b></span>
+          <span>Android <b>7.0+</b></span>
+          <span><b>arm64</b> phones</span>
+          <span>Version <b>1.0.0</b></span>
+        </div>
+        <div class="checksum">SHA-256 c2a337d6577ee9463784028cf950dc1d58b43ec9cf16cf98f19cc3b4f0616cd6</div>
+      </div>
+    </div>
+    <div class="phone icononly"><img src="icon.png" alt="Cliper app icon"></div>
+  </div>
+
+  <section id="features">
+    <h2>What it does</h2>
+    <p class="sub">Everything below runs locally — your videos never leave the phone.</p>
+    <div class="grid">
+      <div class="card"><h3><span class="dot"></span>Templates</h3><p><span class="num">20</span> ready-made edits in 10 categories — vlogs, travel, gaming, Insta stories, birthdays. Beat-synced templates cut on the music's tempo.</p></div>
+      <div class="card"><h3><span class="dot"></span>Looks &amp; effects</h3><p><span class="num">33</span> colour looks and <span class="num">16</span> effects (zoom, pan, shake, VHS, glitch, glow) drawn live with GPU fragment shaders.</p></div>
+      <div class="card"><h3><span class="dot"></span>Transitions</h3><p><span class="num">26</span> transitions — dissolves, whips, slides, wipes, iris, glitch — previewed and exported identically.</p></div>
+      <div class="card"><h3><span class="dot"></span>Timeline editing</h3><p>Trim, split, duplicate, reorder, speed, rotate, crop and fit, background fill for letterboxed clips, undo/redo.</p></div>
+      <div class="card"><h3><span class="dot"></span>Text &amp; subtitles</h3><p>Styled titles with fonts, boxes and outlines, timed on the timeline. SRT subtitle import and YouTube chapter export.</p></div>
+      <div class="card"><h3><span class="dot"></span>Audio</h3><p>Music library and sound effects, voice-over recording, ducking under speech, silence/beat auto-cut, an audio studio and beat composer.</p></div>
+      <div class="card"><h3><span class="dot"></span>Photo editor</h3><p>Auto-enhance, crop, looks and 16 tune sliders (exposure, highlights, warmth, clarity…) with full-resolution export.</p></div>
+      <div class="card"><h3><span class="dot"></span>Export</h3><p>720p, 1080p or 4K at 24/30/60 fps using the phone's hardware H.264 encoder, saved straight to the gallery or shared.</p></div>
+    </div>
+  </section>
+
+  <section id="tech">
+    <h2>How it's built</h2>
+    <p class="sub">A Flutter app with a native media pipeline — one FFmpeg command renders the whole edit.</p>
+    <div class="stack" style="margin-bottom:22px">
+      <span class="chip">Flutter <i>3.47</i></span><span class="chip">Dart</span><span class="chip">Riverpod</span>
+      <span class="chip">Drift / SQLite</span><span class="chip">FFmpegKit</span><span class="chip">GLSL fragment shaders</span>
+      <span class="chip">MediaCodec H.264</span><span class="chip">Kotlin</span><span class="chip">Firebase</span><span class="chip">AdMob</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v">463</div><div class="l">automated unit &amp; widget tests</div></div>
+      <div class="stat"><div class="v">100+</div><div class="l">on-device export checks (looks, effects, templates)</div></div>
+      <div class="stat"><div class="v">24k</div><div class="l">lines of Dart</div></div>
+      <div class="stat"><div class="v">0</div><div class="l">changes to your original files: edits are stored as metadata</div></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p class="sub">Cliper isn't on the Play Store yet, so Android asks you to allow the install.</p>
+    <ol class="steps">
+      <li><b>Download the APK</b> with the button above on your Android phone.</li>
+      <li>Open it from the notification or <b>Files → Downloads</b>.</li>
+      <li>If asked, allow <b>Install unknown apps</b> for your browser or file manager, then tap <b>Install</b>.</li>
+      <li>Open <b>Cliper</b>, allow photo &amp; video access, and pick a template from <b>Discover</b>.</li>
+    </ol>
+  </section>
 </main>
-<footer><div class="w">Built by Ayush Srivastava &middot; <a href="https://github.com/Ayush-srivastava504/flutter-app">GitHub</a> &middot; <a href="https://github.com/Ayush-srivastava504/flutter-app/releases">Releases</a></div></footer>
-</body></html>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Ayush Srivastava · Cliper</span>
+    <a href="https://github.com/Ayush-srivastava504/flutter-app">Source on GitHub</a>
+  </div>
+</footer>
+</body>
+</html>
